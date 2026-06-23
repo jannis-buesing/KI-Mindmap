@@ -39,12 +39,16 @@ export async function selectMindmapDirectory() {
   }
 }
 
-export async function saveMindmapToFile(directoryHandle, fileName, data) {
+export async function saveMindmapToFile(directoryHandle, mapName, data, isRenaming) {
   if (!directoryHandle) return false;
+  const updatedData = {
+    ...data,
+    lastChanged: (!isRenaming || !data.lastChanged) ? Date.now() : data.lastChanged
+  }
   try {
-    const fileHandle = await directoryHandle.getFileHandle(`${fileName}.json`, { create: true });
+    const fileHandle = await directoryHandle.getFileHandle(`${mapName}.json`, { create: true });
     const writable = await fileHandle.createWritable();
-    await writable.write(JSON.stringify(data, null, 2));
+    await writable.write(JSON.stringify(updatedData, null, 2));
     await writable.close();
     return true;
   } catch (error) {
@@ -59,10 +63,30 @@ export async function loadMindmapsFromDirectory(directoryHandle) {
   try {
     for await (const entry of directoryHandle.values()) {
       if (entry.kind === 'file' && entry.name.endsWith('.json')) {
-        files.push(entry.name.replace('.json', ''));
+        const file = await entry.getFile();
+        const text = await file.text();
+        
+        let date = 0;
+        try {
+          const parsed = JSON.parse(text);
+          const unifiedData = parsed.rootNode ? parsed : {
+            name: entry.name.replace('.json', ''),
+            lastChanged: parsed.lastChanged || file.lastModified,
+            rootNode: parsed,
+            positions: {}
+          };
+          date = unifiedData.lastChanged;
+        } catch (e) {
+          date = file.lastModified;
+        }
+
+        files.push({
+          name: entry.name.replace('.json', ''),
+          date: date
+        });
       }
     }
-    return files;
+    return files.sort((a, b) => b.date - a.date);
   } catch (error) {
     return [];
   }

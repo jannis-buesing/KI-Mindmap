@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { MindmapBoard } from './MindmapBoard';
-import { Sidebar } from './Sidebar';
+import { SidebarLeft } from './SidebarLeft';
 import { 
   selectMindmapDirectory, 
   saveMindmapToFile, 
@@ -14,7 +14,6 @@ function App() {
   const [dirHandle, setDirHandle] = useState(null);
   const [hasPermission, setHasPermission] = useState(false); // NEU: Status-Tracker
   const [mapsList, setMapsList] = useState([]);
-  const [currentMapName, setCurrentMapName] = useState('');
   const [mindmapData, setMindmapData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [isSaved, setIsSaved] = useState(true);
@@ -64,13 +63,21 @@ function App() {
 
   // 3. Neue leere Mindmap erstellen
   async function handleCreateMap() {
-    const name = `Mindmap_${Date.now()}`;
-    const initialData = { id: "root", label: "Neues Thema", children: [] };
+    const name = `${Date.now()}`;
+    const initialData = { 
+      name: name, 
+      lastChanged: Date.now(), 
+      rootNode: { id: "root", label: "Neues Thema", children: [] },
+      positions: {} 
+    };
     await saveMindmapToFile(dirHandle, name, initialData);
     
     const files = await loadMindmapsFromDirectory(dirHandle);
     setMapsList(files);
-    setCurrentMapName(name);
+    setMindmapData(prev => ({
+      ...prev,
+      name: name
+    }));
     setMindmapData(initialData);
     setIsSaved(true);
   }
@@ -82,23 +89,29 @@ function App() {
     const file = await fileHandle.getFile();
     const text = await file.text();
     
-    setCurrentMapName(name);
-    setMindmapData(JSON.parse(text));
+    const parsedData = JSON.parse(text);
+    setMindmapData(parsedData.rootNode ? parsedData : {
+      name: name, lastChanged: parsedData.lastChanged || file.lastModified, rootNode: parsedData, positions: {}
+    });
     setIsSaved(true);
   }
 
   // 5. Auto-Save-Effekt
   useEffect(() => {
-    if (!dirHandle || !hasPermission || !currentMapName || !mindmapData) return;
+    if (!dirHandle || !hasPermission || !mindmapData?.name) return;
     
     setIsSaved(false);
     const delayDebounce = setTimeout(async () => {
-      const success = await saveMindmapToFile(dirHandle, currentMapName, mindmapData);
-      if (success) setIsSaved(true);
+      const success = await saveMindmapToFile(dirHandle, mindmapData.name, mindmapData, false);
+      if (success) {
+        setIsSaved(true);
+        const files = await loadMindmapsFromDirectory(dirHandle);
+        setMapsList(files);
+      }
     }, 500);
 
     return () => clearTimeout(delayDebounce);
-  }, [mindmapData, currentMapName, dirHandle, hasPermission]);
+  }, [mindmapData, dirHandle, hasPermission]);
 
   // 6. Löschen
   async function handleDeleteMap(name) {
@@ -106,9 +119,12 @@ function App() {
       await deleteMindmapFile(dirHandle, name);
       const files = await loadMindmapsFromDirectory(dirHandle);
       setMapsList(files);
-      if (currentMapName === name) {
+      if (mindmapData?.name === name) {
         setMindmapData(null);
-        setCurrentMapName('');
+        setMindmapData(prev => ({
+          ...prev,
+          name: ''
+        }));
       }
     }
   }
@@ -121,17 +137,22 @@ function App() {
     const text = await file.text();
     const data = JSON.parse(text);
 
-    await saveMindmapToFile(dirHandle, newName, data);
+    await saveMindmapToFile(dirHandle, newName, data, true);
     await deleteMindmapFile(dirHandle, oldName);
 
     const files = await loadMindmapsFromDirectory(dirHandle);
     setMapsList(files);
-    if (currentMapName === oldName) setCurrentMapName(newName);
+    if (mindmapData?.name === oldName) {
+      setMindmapData(prev => ({
+        ...prev,
+        name: newName
+      }));
+    }
   }
 
   // 8. KI Generierung
   async function generateMindmap() {
-    if (!currentMapName) {
+    if (!mindmapData?.name) {
       alert("Bitte wähle oder erstelle zuerst eine Mindmap in der linken Leiste!");
       return;
     }
@@ -139,11 +160,11 @@ function App() {
     try {
       const ai = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
       const model = ai.getGenerativeModel({ 
-        model: "gemini-3.5-flash", 
+        model: "gemini-3-flash-preview", 
         generationConfig: { responseMimeType: "application/json" }
       });
 
-      const prompt = `Erstelle eine detaillierte Mindmap zum Thema '${mindmapData?.label || 'Vite & React'}'. 
+      const prompt = `Erstelle eine detaillierte Mindmap zum Thema '${mindmapData.rootNode?.label || 'Übersicht erstellen'}'. 
       Antworte AUSSCHLIESSLICH als valides JSON-Objekt mit folgender Struktur:
       {
         "id": "root",
@@ -154,7 +175,7 @@ function App() {
       }`;
 
       const result = await model.generateContent(prompt);
-      setMindmapData(JSON.parse(result.response.text()));
+      setMindmapData(prev => ({ ...prev, rootNode: JSON.parse(result.response.text()) }));
     } catch (error) {
       console.error(error);
     } finally {
@@ -165,11 +186,11 @@ function App() {
   return (
     <div style={{ display: 'flex', width: '100vw', height: '100vh', overflow: 'hidden' }}>
       
-      <Sidebar 
+      <SidebarLeft 
         dirName={dirHandle?.name}
         onSelectDir={handleSelectDirectory}
         maps={mapsList}
-        currentMap={currentMapName}
+        currentMap={mindmapData?.name || ''}
         onSelectMap={handleSelectMap}
         onDeleteMap={handleDeleteMap}
         onRenameMap={handleRenameMap}
@@ -181,12 +202,16 @@ function App() {
       <div style={{ flex: 1, padding: '30px', display: 'flex', flexDirection: 'column' }}>
         <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            {!currentMapName && <h1>KI Mindmap Studio</h1>}
+            {!mindmapData?.name && <h1>KI Mindmap Studio</h1>}
           </div>
         </header>
 
         {mindmapData ? (
-          <MindmapBoard rawData={mindmapData} />
+          <MindmapBoard 
+            rawData={mindmapData.rootNode} 
+            positions={mindmapData.positions} 
+            setMindmapData={setMindmapData}
+          />
         ) : (
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--code-bg)', borderRadius: '12px', border: '1px dashed var(--border)', marginTop: '20px' }}>
             {dirHandle && hasPermission 
@@ -197,7 +222,7 @@ function App() {
           </div>
         )}
 
-        {currentMapName && (
+        {mindmapData?.name && (
             <button 
               onClick={generateMindmap} 
               disabled={loading}
