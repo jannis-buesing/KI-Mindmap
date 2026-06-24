@@ -39,17 +39,54 @@ export async function selectMindmapDirectory() {
   }
 }
 
-export async function saveMindmapToFile(directoryHandle, mapName, data, isRenaming) {
+async function getUniqueFileName(directoryHandle, baseName, extension = '.json') {
+  let name = baseName;
+  let counter = 1;
+  
+  // Wir holen uns alle existierenden Dateinamen im Ordner
+  const existingNames = new Set();
+  for await (const entry of directoryHandle.values()) {
+    if (entry.kind === 'file') {
+      existingNames.add(entry.name.toLowerCase());
+    }
+  }
+
+  // Solange der Name existiert, hängen wir eine Nummer an
+  while (existingNames.has(`${name}${extension}`.toLowerCase())) {
+    name = `${baseName} (${counter})`;
+    counter++;
+  }
+  
+  return `${name}${extension}`;
+}
+
+export async function saveMindmapToFile(directoryHandle, fileName, data, isRenaming) {
   if (!directoryHandle) return false;
+
   const updatedData = {
     ...data,
     lastChanged: (!isRenaming || !data.lastChanged) ? Date.now() : data.lastChanged
   }
+
   try {
-    const fileHandle = await directoryHandle.getFileHandle(`${mapName}.json`, { create: true });
+    let finalFileName;
+
+    if(isRenaming){
+      finalFileName = await getUniqueFileName(directoryHandle, fileName);
+    } else if(data._currentFileName){
+      finalFileName = `${data._currentFileName}.json`;
+    } else{
+      finalFileName = await getUniqueFileName(directoryHandle, fileName);
+    }
+
+    const fileHandle = await directoryHandle.getFileHandle(finalFileName, { create: true });
+
+    updatedData._currentFileName = finalFileName.replace('.json', '');
+
     const writable = await fileHandle.createWritable();
     await writable.write(JSON.stringify(updatedData, null, 2));
     await writable.close();
+    console.log("Fertig geschrieben: ", updatedData);
     return true;
   } catch (error) {
     console.error("Fehler beim Speichern:", error);
@@ -66,24 +103,24 @@ export async function loadMindmapsFromDirectory(directoryHandle) {
         const file = await entry.getFile();
         const text = await file.text();
         
-        let date = 0;
         try {
           const parsed = JSON.parse(text);
-          const unifiedData = parsed.rootNode ? parsed : {
-            name: entry.name.replace('.json', ''),
-            lastChanged: parsed.lastChanged || file.lastModified,
-            rootNode: parsed,
-            positions: {}
-          };
-          date = unifiedData.lastChanged;
-        } catch (e) {
-          date = file.lastModified;
-        }
+          const currentFileName = entry.name.replace('.json', '');
+          
+          const uniqueId = parsed.id || `${Date.now()}_${Math.floor(Math.random() * 1000)}`;
 
-        files.push({
-          name: entry.name.replace('.json', ''),
-          date: date
-        });
+          files.push({
+            id: uniqueId,
+            name: currentFileName,
+            date: parsed.lastChanged || file.lastModified
+          });
+        } catch (e) {
+          files.push({
+            id: entry.name,
+            name: entry.name.replace('.json', ''),
+            date: file.lastModified
+          });
+        }
       }
     }
     return files.sort((a, b) => b.date - a.date);

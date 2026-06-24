@@ -63,91 +63,108 @@ function App() {
 
   // 3. Neue leere Mindmap erstellen
   async function handleCreateMap() {
-    const name = `${Date.now()}`;
-    const initialData = { 
-      name: name, 
+    const uniqueId = `${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    const defaultName = 'Neue Mindmap';
+
+    const initialData = {
+      id: uniqueId, 
+      name: defaultName,
+      _currentFileName: '', 
       lastChanged: Date.now(), 
-      rootNode: { id: "root", label: "Neues Thema", children: [] },
+      rootNode: { id: "root", label: defaultName, children: [] },
       positions: {} 
     };
-    await saveMindmapToFile(dirHandle, name, initialData);
+
+    await saveMindmapToFile(dirHandle, defaultName, initialData, false);
     
     const files = await loadMindmapsFromDirectory(dirHandle);
     setMapsList(files);
-    setMindmapData(prev => ({
-      ...prev,
-      name: name
-    }));
-    setMindmapData(initialData);
+
+    const fileInfo = files.find(f => f.id === uniqueId);
+    setMindmapData({ ...initialData, _currentFileName: fileInfo?.name || defaultName });
     setIsSaved(true);
   }
 
   // 4. Bestehende Mindmap aus Datei laden
-  async function handleSelectMap(name) {
+  async function handleSelectMap(id) {
     if (!dirHandle || !hasPermission) return;
-    const fileHandle = await dirHandle.getFileHandle(`${name}.json`);
+
+    const foundMap = mapsList.find(m => m.id === id);
+    if(!foundMap) return;
+
+    const fileHandle = await dirHandle.getFileHandle(`${foundMap.name}.json`);
     const file = await fileHandle.getFile();
     const text = await file.text();
-    
     const parsedData = JSON.parse(text);
+
     setMindmapData(parsedData.rootNode ? parsedData : {
-      name: name, lastChanged: parsedData.lastChanged || file.lastModified, rootNode: parsedData, positions: {}
+      name: foundMap.name, lastChanged: parsedData.lastChanged || file.lastModified, rootNode: parsedData, positions: {}
     });
     setIsSaved(true);
   }
 
   // 5. Auto-Save-Effekt
   useEffect(() => {
-    if (!dirHandle || !hasPermission || !mindmapData?.name) return;
+    if (!dirHandle || !hasPermission || !mindmapData?.id) return;
     
     setIsSaved(false);
     const delayDebounce = setTimeout(async () => {
-      const success = await saveMindmapToFile(dirHandle, mindmapData.name, mindmapData, false);
-      if (success) {
-        setIsSaved(true);
-        const files = await loadMindmapsFromDirectory(dirHandle);
-        setMapsList(files);
-      }
+      // const success = await saveMindmapToFile(dirHandle, mindmapData.name, mindmapData, false);
+      // if (success) {
+      //   setIsSaved(true);
+      //   const files = await loadMindmapsFromDirectory(dirHandle);
+      //   setMapsList(files);
+      // }
+
+      await saveMindmapToFile(dirHandle, mindmapData.name, mindmapData, false);
+      setIsSaved(true);
     }, 500);
 
     return () => clearTimeout(delayDebounce);
   }, [mindmapData, dirHandle, hasPermission]);
 
   // 6. Löschen
-  async function handleDeleteMap(name) {
-    if (confirm(`Möchtest du "${name}" wirklich löschen?`)) {
-      await deleteMindmapFile(dirHandle, name);
+  async function handleDeleteMap(id) {
+    const foundMap = mapsList.find(m => m.id === id);
+    if (!foundMap) return;
+
+    if (confirm(`Möchtest du "${foundMap.name}" wirklich löschen?`)) {
+      await deleteMindmapFile(dirHandle, foundMap.name);
       const files = await loadMindmapsFromDirectory(dirHandle);
       setMapsList(files);
-      if (mindmapData?.name === name) {
+      if (mindmapData?.id === id) {
         setMindmapData(null);
-        setMindmapData(prev => ({
-          ...prev,
-          name: ''
-        }));
       }
     }
   }
 
   // 7. Umbenennen
-  async function handleRenameMap(oldName, newName) {
-    if (!newName || oldName === newName) return;
-    const fileHandle = await dirHandle.getFileHandle(`${oldName}.json`);
+  async function handleRenameMap(id, newName) {
+    if (!newName) return;
+    const foundMap = mapsList.find(m => m.id === id);
+    if (!foundMap) return;
+    if (foundMap.name === newName) return;
+
+    const fileHandle = await dirHandle.getFileHandle(`${foundMap.name}.json`);
     const file = await fileHandle.getFile();
     const text = await file.text();
     const data = JSON.parse(text);
 
-    await saveMindmapToFile(dirHandle, newName, data, true);
-    await deleteMindmapFile(dirHandle, oldName);
+    const updatedData = {
+      ...data,
+      name: newName
+    }
+
+    await saveMindmapToFile(dirHandle, newName, updatedData, true);
+    await deleteMindmapFile(dirHandle, foundMap.name);
 
     const files = await loadMindmapsFromDirectory(dirHandle);
     setMapsList(files);
-    if (mindmapData?.name === oldName) {
-      setMindmapData(prev => ({
-        ...prev,
-        name: newName
-      }));
-    }
+
+    if (mindmapData?.id === id) {
+      const updatedFileInfo = files.find(f => f.id === id);
+      setMindmapData({ ...updatedData, _currentFileName: updatedFileInfo?.name || newName });
+  }
   }
 
   // 8. KI Generierung
@@ -190,7 +207,7 @@ function App() {
         dirName={dirHandle?.name}
         onSelectDir={handleSelectDirectory}
         maps={mapsList}
-        currentMap={mindmapData?.name || ''}
+        currentMap={mindmapData?.id || ''}
         onSelectMap={handleSelectMap}
         onDeleteMap={handleDeleteMap}
         onRenameMap={handleRenameMap}

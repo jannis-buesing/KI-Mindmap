@@ -87,15 +87,17 @@ export function SidebarLeft({
                 day: '2-digit', month: '2-digit', year: '2-digit'
               });
 
+              const isCurrentMap = currentMap === map.id;
+
               return (
                 <div 
-                  key={map.name}
-                  onClick={() => currentMap !== map.name && onSelectMap(map.name)}
+                  key={map.id}
+                  onClick={() => !isCurrentMap && onSelectMap(map.id)}
                   style={{
                     padding: '10px',
                     borderRadius: '6px',
-                    background: currentMap === map.name ? 'var(--accent-bg)' : 'transparent',
-                    border: currentMap === map.name ? '1px solid var(--accent-border)' : '1px solid transparent',
+                    background: isCurrentMap ? 'var(--accent-bg)' : 'transparent',
+                    border: isCurrentMap ? '1px solid var(--accent-border)' : '1px solid transparent',
                     cursor: 'pointer',
                     display: 'flex',
                     justifyContent: 'space-between',
@@ -103,12 +105,12 @@ export function SidebarLeft({
                   }}
                 >
                   {/* Namen ändern und speichern - Logik */}
-                  {editingName === map.name ? (
+                  {editingName === map.id ? (
                     <input 
                       value={tempName} 
                       onChange={(e) => setTempName(e.target.value)}
                       onBlur={() => {
-                        onRenameMap(map.name, tempName);
+                        onRenameMap(map.id, tempName);
                         setEditingName(null);
                       }}
                       onKeyDown={(e) => {
@@ -120,7 +122,7 @@ export function SidebarLeft({
                       style={{ width: '70%' }}
                     />
                   ) : (
-                    <span style={{ fontWeight: currentMap === map.name ? '600' : 'normal', color: 'var(--text-h)' }}>
+                    <span style={{ fontWeight: isCurrentMap ? '600' : 'normal', color: 'var(--text-h)' }}>
                       {map.name} <small style={{ color: 'gray', fontWeight: 'normal', fontSize: '11px' }}>({formatiertesDatum})</small>
                     </span>
                   )}
@@ -139,30 +141,30 @@ export function SidebarLeft({
                     
                     <button 
                       onClick={(e) => {
-                        setActiveMenu(activeMenu === map.name ? null : map.name);
+                        setActiveMenu(activeMenu === map.id ? null : map.id);
                         const elternteil = e.currentTarget.parentNode;
                         setTimeout(() => {
                           elternteil.focus();
                         }, 0);
                       }}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', padding: '0 5px', height: '12px', userSelect: 'none', display: activeMenu === map.name ? 'none' : 'inline-block' }}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', padding: '0 5px', height: '12px', userSelect: 'none', display: activeMenu === map.id ? 'none' : 'inline-block' }}
                     >
                       ⋮
                     </button>
                     
 
-                    {activeMenu === map.name && (
+                    {activeMenu === map.id && (
                       
                         <button 
-                          onClick={() => { setEditingName(map.name); setTempName(map.name); setActiveMenu(null); }} 
+                          onClick={() => { setEditingName(map.id); setTempName(map.name); setActiveMenu(null); }} 
                           style={{ background: 'none', border: 'none', cursor: 'pointer', height: '12px', userSelect: 'none' }}
                         >
                           ✏️
                         </button>
                     )}
-                    {activeMenu === map.name && (
+                    {activeMenu === map.id && (
                         <button 
-                          onClick={() => { onDeleteMap(map.name); setActiveMenu(null); }} 
+                          onClick={() => { onDeleteMap(map.id); setActiveMenu(null); }} 
                           style={{ background: 'none', border: 'none', cursor: 'pointer', height: '12px', userSelect: 'none' }}
                         >
                           🗑️

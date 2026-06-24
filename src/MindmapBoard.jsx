@@ -93,9 +93,15 @@ export function MindmapBoard({ rawData, positions, setMindmapData }) {
           if (!prev) return prev;
 
           const newPositions = { ...(prev.positions || {}) };
+
+          const gridSize = 15;
+
           updatedNodes.forEach((node) => {
             if (node.position) {
-              newPositions[node.id] = { x: node.position.x, y: node.position.y };
+              const snappedX = Math.round(node.position.x / gridSize) * gridSize;
+              const snappedY = Math.round(node.position.y / gridSize) * gridSize;
+
+              newPositions[node.id] = { x: snappedX, y: snappedY };
             }
           });
 
@@ -119,9 +125,11 @@ export function MindmapBoard({ rawData, positions, setMindmapData }) {
         edges={edges}
         onNodesChange={onNodesChangeCustom}
         onEdgesChange={onEdgesChange}
+        snapToGrid={true}
+        snapGrid={[15, 15]}
         fitView // Zoomt beim Laden automatisch so, dass man alles sieht
       >
-        <Background color="var(--text)" gap={16} size={1} />
+        <Background color="var(--text)" gap={15} size={1} />
         <Controls />
       </ReactFlow>
     </div>
