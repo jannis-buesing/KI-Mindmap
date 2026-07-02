@@ -16,6 +16,15 @@ export function SidebarLeft({
   const [editingName, setEditingName] = useState(null);
   const [tempName, setTempName] = useState('');
 
+
+  const activeMapObject = maps.find(m => m.id === currentMap);
+
+  const CurrentMapDate = activeMapObject?.date
+    ? new Date(activeMapObject.date).toLocaleDateString('de-DE', {
+        day: '2-digit', month: '2-digit', year: '2-digit'
+      })
+    : '--.--.--';
+
   return (
     <div style={{
       width: '300px',
@@ -34,6 +43,7 @@ export function SidebarLeft({
         
         {/* DYNAMISCHER BUTTON: Wechselt den Text je nach Zustand */}
         <button 
+          id='btn_ordnerWechseln'
           onClick={onSelectDir} 
           style={{ 
             display: 'block', 
@@ -60,7 +70,8 @@ export function SidebarLeft({
       {/* Die restliche Sidebar wird NUR angezeigt, wenn wir den Ordner UND die Erlaubnis haben */}
       {dirName && hasPermission ? (
         <>
-          <button 
+          <button
+            id='btn_neueMindmap'
             onClick={onCreateMap} 
             style={{ 
               backgroundColor: 'var(--accent)', 
@@ -77,31 +88,37 @@ export function SidebarLeft({
             + Neue Mindmap
           </button>
 
-          <div style={{ marginBottom: '15px', fontSize: '14px' }}>
+          
+
+          <div style={{ marginBottom: '15px', fontSize: '14px', display: 'flex', gap: '4px' }}>
             Status: {isSaved ? <span style={{ color: 'green' }}>● Gespeichert</span> : <span style={{ color: 'orange' }}>● Ungespeichert</span>}
+
+            <small style={{ color: 'gray', fontWeight: 'normal', fontSize: '11px', marginLeft: 'auto' }}>
+                        ({CurrentMapDate})
+            </small>
           </div>
 
           <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {maps.map(map => {
-              const formatiertesDatum = new Date(map.date).toLocaleDateString('de-DE', {
-                day: '2-digit', month: '2-digit', year: '2-digit'
-              });
 
               const isCurrentMap = currentMap === map.id;
 
               return (
-                <div 
+                <div
+                  className='btn_mappedMindmaps' 
                   key={map.id}
                   onClick={() => !isCurrentMap && onSelectMap(map.id)}
                   style={{
-                    padding: '10px',
+                    padding: '0 10px',
+                    height: '48px',
                     borderRadius: '6px',
                     background: isCurrentMap ? 'var(--accent-bg)' : 'transparent',
                     border: isCurrentMap ? '1px solid var(--accent-border)' : '1px solid transparent',
                     cursor: 'pointer',
                     display: 'flex',
                     justifyContent: 'space-between',
-                    alignItems: 'center'
+                    alignItems: 'center',
+                    boxSizing: 'border-box'
                   }}
                 >
                   {/* Namen ändern und speichern - Logik */}
@@ -119,11 +136,28 @@ export function SidebarLeft({
                         }
                       }}
                       autoFocus
-                      style={{ width: '70%' }}
+                      style={{ width: '70%', height: '30px', boxSizing: 'border-box' }}
                     />
                   ) : (
-                    <span style={{ fontWeight: isCurrentMap ? '600' : 'normal', color: 'var(--text-h)' }}>
-                      {map.name} <small style={{ color: 'gray', fontWeight: 'normal', fontSize: '11px' }}>({formatiertesDatum})</small>
+                    <span style={{ 
+                      fontWeight: isCurrentMap ? '600' : 'normal', 
+                      color: 'var(--text-h)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      overflow: 'hidden', 
+                      flex: 1,
+                      marginRight: '10px'
+                    }}>
+                      <span style={{ 
+                        overflow: 'hidden', 
+                        textOverflow: 'ellipsis', 
+                        whiteSpace: 'nowrap',
+                        flex: 1 
+                      }}>
+                        {map.name}
+                      </span>
+                      {/* Das Datum bleibt starr stehen */}
                     </span>
                   )}
 
@@ -135,7 +169,7 @@ export function SidebarLeft({
                         setActiveMenu(null);
                       }
                     }}
-                    style={{ position: 'relative', outline: 'none' }} 
+                    style={{ position: 'relative', outline: 'none', display: 'flex', alignItems: 'center', gap: '2px' }} 
                     onClick={(e) => e.stopPropagation()}
                   >
                     
@@ -147,7 +181,8 @@ export function SidebarLeft({
                           elternteil.focus();
                         }, 0);
                       }}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', padding: '0 5px', height: '12px', userSelect: 'none', display: activeMenu === map.id ? 'none' : 'inline-block' }}
+                      className='btn_dreiPunkteMenu'
+                      style={{ display: activeMenu === map.id ? 'none' : 'inline-block' }}
                     >
                       ⋮
                     </button>
@@ -157,7 +192,7 @@ export function SidebarLeft({
                       
                         <button 
                           onClick={() => { setEditingName(map.id); setTempName(map.name); setActiveMenu(null); }} 
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', height: '12px', userSelect: 'none' }}
+                          className="btn_dreiPunkteMenu"
                         >
                           ✏️
                         </button>
@@ -165,7 +200,7 @@ export function SidebarLeft({
                     {activeMenu === map.id && (
                         <button 
                           onClick={() => { onDeleteMap(map.id); setActiveMenu(null); }} 
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', height: '12px', userSelect: 'none' }}
+                          className="btn_dreiPunkteMenu"
                         >
                           🗑️
                         </button>

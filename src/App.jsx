@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { MindmapBoard } from './MindmapBoard';
 import { SidebarLeft } from './SidebarLeft';
+import { SidebarRight } from './SidebarRight';
 import { 
   selectMindmapDirectory, 
   saveMindmapToFile, 
@@ -17,6 +18,7 @@ function App() {
   const [mindmapData, setMindmapData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [isSaved, setIsSaved] = useState(true);
+  const isInitialLoad = useRef(true);
 
   // 1. Beim Starten nachsehen, ob ein Ordner in IndexedDB schlummert
   useEffect(() => {
@@ -70,7 +72,8 @@ function App() {
       id: uniqueId, 
       name: defaultName,
       _currentFileName: '', 
-      lastChanged: Date.now(), 
+      lastChanged: Date.now(),
+      date: Date.now(),
       rootNode: { id: "root", label: defaultName, children: [] },
       positions: {} 
     };
@@ -97,6 +100,7 @@ function App() {
     const text = await file.text();
     const parsedData = JSON.parse(text);
 
+    isInitialLoad.current = true;
     setMindmapData(parsedData.rootNode ? parsedData : {
       name: foundMap.name, lastChanged: parsedData.lastChanged || file.lastModified, rootNode: parsedData, positions: {}
     });
@@ -106,18 +110,19 @@ function App() {
   // 5. Auto-Save-Effekt
   useEffect(() => {
     if (!dirHandle || !hasPermission || !mindmapData?.id) return;
+
+    if(isInitialLoad.current){
+      isInitialLoad.current = false;
+      return;
+    }
     
     setIsSaved(false);
     const delayDebounce = setTimeout(async () => {
-      // const success = await saveMindmapToFile(dirHandle, mindmapData.name, mindmapData, false);
-      // if (success) {
-      //   setIsSaved(true);
-      //   const files = await loadMindmapsFromDirectory(dirHandle);
-      //   setMapsList(files);
-      // }
-
       await saveMindmapToFile(dirHandle, mindmapData.name, mindmapData, false);
       setIsSaved(true);
+
+      const files = await loadMindmapsFromDirectory(dirHandle);
+      setMapsList(files);
     }, 500);
 
     return () => clearTimeout(delayDebounce);
@@ -200,8 +205,12 @@ function App() {
     }
   }
 
+  function keinContextMenu(){
+    event.preventDefault();
+  }
+
   return (
-    <div style={{ display: 'flex', width: '100vw', height: '100vh', overflow: 'hidden' }}>
+    <div onContextMenu={keinContextMenu} style={{ display: 'flex', width: '100vw', height: '100vh', overflow: 'hidden' }}>
       
       <SidebarLeft 
         dirName={dirHandle?.name}
@@ -245,6 +254,7 @@ function App() {
               disabled={loading}
               style={{
                 padding: '12px 24px',
+                margin: '1rem 0',
                 fontSize: '16px',
                 backgroundColor: 'var(--accent)',
                 color: '#fff',
@@ -257,6 +267,8 @@ function App() {
             </button>
           )}
       </div>
+
+      <SidebarRight />
     </div>
   );
 }

@@ -64,3 +64,85 @@ code {
   border-radius: 4px;
   color: var(--text-h);
 }
+
+/* ===================== Buttons SideBarLeft ======================== */
+
+#btn_neueMindmap:hover {
+  box-shadow: 0 0 12px var(--accent);
+  transition: 0.2s;
+}
+
+#btn_ordnerWechseln:hover, .btn_mappedMindmaps:hover {
+  background-color: var(--border) !important;
+  border: 1px solid transparent !important;
+  transition: 0.1s;
+}
+
+.btn_dreiPunkteMenu {
+    background: none;
+    border: none;
+    cursor: pointer;
+    user-select: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    transition: background 0.2s, transform 0.1s;
+    font-size: 14px;
+  }
+  .btn_dreiPunkteMenu:hover {
+    background: var(--accent-border, #e2e8f0);
+  }
+  .btn_dreiPunkteMenu:active {
+    transform: scale(0.92);
+  }
+
+/* ===================== Buttons SideBarLeft ======================== */
+
+
+/* =================== Selections in der Mindmap ====================== */
+/* Selection-Box */
+.react-flow__selection{
+  background: var(--accent-bg) !important;
+  border: 2px solid var(--accent) !important;
+  border-radius: 4px;
+}
+
+/* ausgewählte Nodes */
+.react-flow__node.selected,
+.react-flow__node.selected:focus,
+.react-flow__node.selected:focus-visible,
+.react-flow__node:hover,
+.react-flow__node:active
+ {
+  border-color: var(--accent-border) !important;
+  box-shadow: 0 0 0 2px var(--accent) !important;
+  outline: none !important;
+  transition: border-color 0.1s ease, box-shadow 0.3s ease;
+}
+
+.react-flow__node.selected *,
+.react-flow__node:focus * {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.react-flow__nodesselection-rect,
+.react-flow__nodesselection-rect:hover {
+  background: transparent !important;
+  border: none !important;
+  pointer-events: none !important;
+}
+
+/* ausgewählte Verbindungen */
+.react-flow__edge .react-flow__edge * {
+  stroke: var(--accent) !important;
+}
+
+.react-flow__edge-interaction{
+  pointer-events: none !important;
+}
+/* =================== Selections in der Mindmap ====================== */
+
