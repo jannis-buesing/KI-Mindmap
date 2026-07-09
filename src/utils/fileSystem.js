@@ -65,7 +65,9 @@ export async function saveMindmapToFile(directoryHandle, fileName, data, isRenam
 
   const updatedData = {
     ...data,
-    lastChanged: (!isRenaming || !data.lastChanged) ? Date.now() : data.lastChanged
+    lastChanged: isRenaming 
+      ? (data.lastChanged || Date.now())
+      : Date.now()
   }
 
   try {

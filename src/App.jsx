@@ -13,12 +13,15 @@ import {
 
 function App() {
   const [dirHandle, setDirHandle] = useState(null);
-  const [hasPermission, setHasPermission] = useState(false); // NEU: Status-Tracker
+  const [hasPermission, setHasPermission] = useState(false);
   const [mapsList, setMapsList] = useState([]);
   const [mindmapData, setMindmapData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [isSaved, setIsSaved] = useState(true);
   const isInitialLoad = useRef(true);
+  const isRenamingRef = useRef(false);
+  const [selectedNodes, setSelectedNodes] = useState([]); 
+  const selectedNodeIds = selectedNodes.map(n => n.id);
 
   // 1. Beim Starten nachsehen, ob ein Ordner in IndexedDB schlummert
   useEffect(() => {
@@ -115,6 +118,10 @@ function App() {
       isInitialLoad.current = false;
       return;
     }
+    if (isRenamingRef.current) {
+      isRenamingRef.current = false;
+      return; 
+    }
     
     setIsSaved(false);
     const delayDebounce = setTimeout(async () => {
@@ -150,6 +157,8 @@ function App() {
     if (!foundMap) return;
     if (foundMap.name === newName) return;
 
+    isRenamingRef.current = true;
+
     const fileHandle = await dirHandle.getFileHandle(`${foundMap.name}.json`);
     const file = await fileHandle.getFile();
     const text = await file.text();
@@ -173,44 +182,110 @@ function App() {
   }
 
   // 8. KI Generierung
-  async function generateMindmap() {
+  async function expandMindmap() {
     if (!mindmapData?.name) {
       alert("Bitte wähle oder erstelle zuerst eine Mindmap in der linken Leiste!");
       return;
     }
-    setLoading(true);
-    try {
-      const ai = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
-      const model = ai.getGenerativeModel({ 
-        model: "gemini-3-flash-preview", 
-        generationConfig: { responseMimeType: "application/json" }
-      });
 
-      const prompt = `Erstelle eine detaillierte Mindmap zum Thema '${mindmapData.rootNode?.label || 'Übersicht erstellen'}'. 
+    const ai = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
+
+    const AVAILABLE_MODELS = [
+      'gemini-3.5-flash',
+      'gemini-3.1-flash-lite',
+      'gemini-2.5-flash',
+      'gemini-2.5-flash-lite'
+    ];
+
+    const prompt = `Erstelle eine detaillierte Mindmap zum Thema '${mindmapData.rootNode?.label || 'Übersicht erstellen'}'. 
       Antworte AUSSCHLIESSLICH als valides JSON-Objekt mit folgender Struktur:
       {
         "id": "root",
         "label": "Hauptthema",
         "children": [
           { "id": "u1", "label": "Unterthema 1", "children": [] }
-        ]
+        ],
+        "borderColor": "var(--default-node-border)"
       }`;
 
+    setLoading(true);
+
+    for(const modelName of AVAILABLE_MODELS){
+      try {
+      console.log(`Versuche Modell: ${modelName}...`); ///////////TEST///////////
+      
+      const model = ai.getGenerativeModel({ 
+          model: modelName, 
+          generationConfig: { responseMimeType: "application/json" }
+        });
       const result = await model.generateContent(prompt);
-      setMindmapData(prev => ({ ...prev, rootNode: JSON.parse(result.response.text()) }));
-    } catch (error) {
-      console.error(error);
-    } finally {
+
+      console.log(`Erfolg mit Modell: ${modelName}`); //////////////TEST////////////
+
       setLoading(false);
+      setMindmapData(prev => ({ ...prev, rootNode: JSON.parse(result.response.text()) }));  //// Überschreibung der gesamten Mindmap
+
+      return;
+    } catch (error) {
+      console.warn(`Modell ${modelName} fehlgeschlagen. Fehler: ${error.message || error}`); /////////////TEST////////////
+      
+      continue; 
     }
   }
+
+  throw new Error("Alle verfügbaren Gemini-Modelle sind derzeit ausgelastet (503).");
+}
+
+  const handleUpdateSelectedNodes = (field, value) => {
+    console.log("Updating nodes: ", field, value, selectedNodeIds);
+    // 1. Lokalen Zustand der ausgewählten Nodes sofort im UI spiegeln
+    setSelectedNodes(current => current.map(node => {
+      if (field === 'label') {
+        return { ...node, data: { ...node.data, label: value } };
+      }
+      if (field === 'borderColor') {
+        return { ...node, style: { ...node.style, borderColor: value } };
+      }
+      return node;
+    }));
+
+    // 2. Den eigentlichen persistenten Mindmap-Baum aktualisieren
+    setMindmapData((prev) => {
+      if (!prev) return prev;
+
+      const updateRecursive = (treeNode) => {
+        let updatedNode = { ...treeNode };
+        if (selectedNodeIds.includes(treeNode.id)) {
+          if (field === 'label') updatedNode.label = value;
+          if (field === 'borderColor') updatedNode.borderColor = value;
+        }
+        if (treeNode.children) {
+          updatedNode.children = treeNode.children.map(updateRecursive);
+        }
+        return updatedNode;
+      };
+
+      return {
+        ...prev,
+        rootNode: updateRecursive(prev.rootNode)
+      };
+    });
+  };
 
   function keinContextMenu(){
     event.preventDefault();
   }
 
   return (
-    <div onContextMenu={keinContextMenu} style={{ display: 'flex', width: '100vw', height: '100vh', overflow: 'hidden' }}>
+    <div onContextMenu={keinContextMenu} style={{ display: 'flex', position: 'relative', flex: '1 1 auto', width: '100vw', height: '100vh', overflow: 'hidden' }}>
+
+      {loading && (
+        <style>{`
+          * {
+            cursor: wait !important;
+          }
+        `}</style>  
+      )}
       
       <SidebarLeft 
         dirName={dirHandle?.name}
@@ -222,10 +297,10 @@ function App() {
         onRenameMap={handleRenameMap}
         onCreateMap={handleCreateMap}
         isSaved={isSaved}
-        hasPermission={hasPermission} // Übergabe an die Sidebar
+        hasPermission={hasPermission}
       />
 
-      <div style={{ flex: 1, padding: '30px', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ flex: '1 1 20%', minWidth: '200px', padding: '30px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             {!mindmapData?.name && <h1>KI Mindmap Studio</h1>}
@@ -234,9 +309,12 @@ function App() {
 
         {mindmapData ? (
           <MindmapBoard 
-            rawData={mindmapData.rootNode} 
+            rawData={mindmapData.rootNode}
+            currentFileName={mindmapData?.name}
             positions={mindmapData.positions} 
             setMindmapData={setMindmapData}
+            onNodesSelect={setSelectedNodes}
+            selectedNodeIds={selectedNodeIds}
           />
         ) : (
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--code-bg)', borderRadius: '12px', border: '1px dashed var(--border)', marginTop: '20px' }}>
@@ -250,7 +328,7 @@ function App() {
 
         {mindmapData?.name && (
             <button 
-              onClick={generateMindmap} 
+              onClick={expandMindmap} 
               disabled={loading}
               style={{
                 padding: '12px 24px',
@@ -267,8 +345,12 @@ function App() {
             </button>
           )}
       </div>
-
-      <SidebarRight />
+      
+      <SidebarRight 
+        selectedNodeIds={selectedNodeIds}
+        selectedNodes={selectedNodes} 
+        onUpdateNodes={handleUpdateSelectedNodes}
+      />
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 
 export function SidebarLeft({ 
   dirName, 
@@ -15,6 +16,7 @@ export function SidebarLeft({
   const [activeMenu, setActiveMenu] = useState(null);
   const [editingName, setEditingName] = useState(null);
   const [tempName, setTempName] = useState('');
+  const [isOpen, setIsOpen] = useState(true);
 
 
   const activeMapObject = maps.find(m => m.id === currentMap);
@@ -27,19 +29,36 @@ export function SidebarLeft({
 
   return (
     <div style={{
-      width: '300px',
+      width: isOpen ? '300px' : '60px',
       background: 'var(--code-bg)',
       borderRight: '1px solid var(--border)',
       display: 'flex',
       flexDirection: 'column',
-      padding: '20px',
-      boxSizing: 'border-box'
+      flex: '0 5 auto',
+      maxwidth: '25vw',
+      minWidth: isOpen ? '225px' : '60px',
+      padding: isOpen ? '20px' : '14px',
+      boxSizing: 'border-box',
+      transition:'width 0.3s cubic-bezier(0.25, 1, 0.5, 1)'
     }}>
-      <h2>Mindmaps</h2>
-      
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+        }}>
+        {isOpen && <h2>Mindmaps</h2>}
+
+        <button onClick={() => setIsOpen(!isOpen)} id='btn_sidebarLeftToggle'>
+          {isOpen ? (
+          <PanelLeftClose style={{ width: '24px', height: '24px', userSelect: 'none', borderRadius: '100px' }}/>
+        ) : (
+          <PanelLeftOpen style={{ width: '24px', height: '24px', userSelect: 'none', borderRadius: '100px' }}/>
+        )}
+        </button>
+      </div>
       {/* Ordner-Status & Auswahl */}
       <div style={{ fontSize: '13px', margin: '10px 0 20px', color: 'var(--text)' }}>
-        <strong>Pfad:</strong> {dirName ? `📁 ${dirName}` : 'Kein Ordner gewählt'}
+        {isOpen && <div><strong>Pfad:</strong> {dirName ? `📁 ${dirName}` : 'Kein Ordner gewählt'}</div>}
         
         {/* DYNAMISCHER BUTTON: Wechselt den Text je nach Zustand */}
         <button 
@@ -48,13 +67,14 @@ export function SidebarLeft({
           style={{ 
             display: 'block', 
             marginTop: '8px', 
-            width: '100%', 
+            width: isOpen ? '100%' : '32px',
+            height: isOpen ? '32px' : 'auto',
             padding: '8px', 
             cursor: 'pointer',
             backgroundColor: (!hasPermission && dirName) ? '#eab308' : 'transparent', // Gelb warnend, wenn Berechtigung fehlt
             color: (!hasPermission && dirName) ? '#000' : 'var(--text-h)',
             border: '1px solid var(--border)',
-            borderRadius: '4px',
+            borderRadius: '6px',
             fontWeight: (!hasPermission && dirName) ? '600' : 'normal',
             userSelect: 'none'
           }}
@@ -63,7 +83,8 @@ export function SidebarLeft({
             ? 'Lokal-Ordner verbinden' 
             : !hasPermission 
               ? '🔑 Berechtigung erteilen' 
-              : 'Ordner wechseln'}
+              : isOpen ? 'Ordner wechseln'
+                : '📁'}
         </button>
       </div>
 
@@ -72,7 +93,10 @@ export function SidebarLeft({
         <>
           <button
             id='btn_neueMindmap'
-            onClick={onCreateMap} 
+            onClick={() => {
+              setIsOpen(true);
+              onCreateMap();
+            }}
             style={{ 
               backgroundColor: 'var(--accent)', 
               color: '#fff', 
@@ -85,20 +109,22 @@ export function SidebarLeft({
               userSelect: 'none'
             }}
           >
-            + Neue Mindmap
+            {isOpen ? <span>+ Neue Mindmap</span> : <span style={{ width: '32px', height: '32px' }}>+</span>}
           </button>
 
           
 
-          <div style={{ marginBottom: '15px', fontSize: '14px', display: 'flex', gap: '4px' }}>
-            Status: {isSaved ? <span style={{ color: 'green' }}>● Gespeichert</span> : <span style={{ color: 'orange' }}>● Ungespeichert</span>}
+          {isOpen &&
+              <div style={{ marginBottom: '15px', fontSize: '14px', display: 'flex', gap: '4px' }}>
+              Status: {isSaved ? <span style={{ color: 'green' }}>● Gespeichert</span> : <span style={{ color: 'orange' }}>● Ungespeichert</span>}
 
-            <small style={{ color: 'gray', fontWeight: 'normal', fontSize: '11px', marginLeft: 'auto' }}>
-                        ({CurrentMapDate})
-            </small>
-          </div>
+              <small style={{ color: 'gray', fontWeight: 'normal', fontSize: '11px', marginLeft: 'auto' }}>
+                          ({CurrentMapDate})
+              </small>
+            </div>
+          }
 
-          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          { isOpen && <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {maps.map(map => {
 
               const isCurrentMap = currentMap === map.id;
@@ -124,7 +150,8 @@ export function SidebarLeft({
                   {/* Namen ändern und speichern - Logik */}
                   {editingName === map.id ? (
                     <input 
-                      value={tempName} 
+                      value={tempName}
+                      onFocus={(e) => e.target.select()}
                       onChange={(e) => setTempName(e.target.value)}
                       onBlur={() => {
                         onRenameMap(map.id, tempName);
@@ -211,6 +238,7 @@ export function SidebarLeft({
               );
             })}
           </div>
+          }
         </>
       ) : dirName && !hasPermission ? (
         <div style={{ fontSize: '14px', textAlign: 'center', padding: '20px', color: 'var(--text)', background: 'rgba(234, 179, 8, 0.1)', borderRadius: '8px' }}>
