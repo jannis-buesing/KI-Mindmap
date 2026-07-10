@@ -10,12 +10,14 @@ import {
   deleteMindmapFile,
   getStoredDirectoryHandle
 } from './utils/fileSystem';
+import { SendHorizontal } from 'lucide-react';
 
 function App() {
   const [dirHandle, setDirHandle] = useState(null);
   const [hasPermission, setHasPermission] = useState(false);
   const [mapsList, setMapsList] = useState([]);
   const [mindmapData, setMindmapData] = useState(null);
+  const [userInput, setUserInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [isSaved, setIsSaved] = useState(true);
   const isInitialLoad = useRef(true);
@@ -188,6 +190,9 @@ function App() {
       return;
     }
 
+    const targetMapId = mindmapData.id; 
+    const currentPromptText = userInput;
+
     const ai = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
 
     const AVAILABLE_MODELS = [
@@ -197,18 +202,40 @@ function App() {
       'gemini-2.5-flash-lite'
     ];
 
-    const prompt = `Erstelle eine detaillierte Mindmap zum Thema '${mindmapData.rootNode?.label || 'Übersicht erstellen'}'. 
-      Antworte AUSSCHLIESSLICH als valides JSON-Objekt mit folgender Struktur:
+    const prompt = `
+      Du bist ein meisterhafter, strukturierter Mindmap-Experte.
+      Deine Aufgabe ist es, die bestehende Mindmap basierend auf einer Benutzeranweisung gezielt zu verändern.
+      Du gibst AUSSCHLIESSLICH eine flache Liste von Änderungsbefehlen (Operations) als valides JSON-Objekt zurück.
+      Diese werden dann von der Anwendung direkt in den Mindmap-Baum übernommen.
+
+      Aktueller Mindmap-Baum (Kontext):
+      ${JSON.stringify(mindmapData.rootNode, null, 2)}
+
+      vom Nutzer aktuell markierte Knoten-IDs:
+      ${JSON.stringify(selectedNodeIds)}
+
+      Benutzeranweisung:
+      "${currentPromptText}"
+
+      Regeln für das JSON-Ausgabeformat:
+      - WICHTIG: Der zentrale Hauptknoten mit id: "root" darf NIEMALS den Status "deleted" erhalten!
+      - "type": Kann "added", "updated" oder "deleted" sein.
+      - Für "added": Erzeuge eine einzigartige "temporaryId" (z.B. "new_123") und gib die "parentId" an, also, zu welchem Elternknoten der neue Knoten gehört.
+      - Für "updated": Gib die "nodeId" an und liefere das neue "label" sowie das "oldLabel".
+      - Für "deleted": Gib nur die "nodeId" an, die gelöscht werden soll.
+
+      Beispiel für die exakte Struktur (Antworte NUR mit diesem JSON, kein Markdown, kein Text!):
       {
-        "id": "root",
-        "label": "Hauptthema",
-        "children": [
-          { "id": "u1", "label": "Unterthema 1", "children": [] }
-        ],
-        "borderColor": "var(--default-node-border)"
-      }`;
+        "operations": [
+          { "type": "added", "parentId": "root", "temporaryId": "child_1", "label": "Neuer Unterpunkt" },
+          { "type": "updated", "nodeId": "child_2", "oldLabel": "Alter Name", "label": "Neuer Name" },
+          { "type": "deleted", "nodeId": "child_3" }
+        ]
+      }
+    `;
 
     setLoading(true);
+    setUserInput('');
 
     for(const modelName of AVAILABLE_MODELS){
       try {
@@ -218,23 +245,183 @@ function App() {
           model: modelName, 
           generationConfig: { responseMimeType: "application/json" }
         });
-      const result = await model.generateContent(prompt);
 
+      const result = await model.generateContent(prompt);
+      const data = JSON.parse(result.response.text());
+      const operations = data.operations || [];
+
+      console.log(`Erhaltene Operationen:`, operations); ///////////TEST///////////
       console.log(`Erfolg mit Modell: ${modelName}`); //////////////TEST////////////
 
-      setLoading(false);
-      setMindmapData(prev => ({ ...prev, rootNode: JSON.parse(result.response.text()) }));  //// Überschreibung der gesamten Mindmap
+      const injectStatusIntoTree = (node) => {
+        if (!node) return null;
 
+        let updatedNode = { ...node };
+
+        // Schauen, ob eine Operation diesen bestehenden Knoten betrifft (Update oder Delete)
+        const op = operations.find(o => o.nodeId === node.id);
+        if (op) {
+          if (op.type === 'updated') {
+            updatedNode.status = 'updated';
+            updatedNode.oldLabel = op.oldLabel;
+            updatedNode.label = op.label;
+          }
+          if (op.type === 'deleted') {
+            updatedNode.status = 'deleted';
+          }
+        }
+
+        // Kinder verarbeiten
+        let currentChildren = node.children ? node.children.map(injectStatusIntoTree) : [];
+
+        // Schauen, ob neue Kinder an DIESEN Knoten angehängt werden müssen (Added)
+        const newChildrenOps = operations.filter(o => o.type === 'added' && o.parentId === node.id);
+        newChildrenOps.forEach(newOp => {
+          currentChildren.push({
+            id: newOp.temporaryId,
+            label: newOp.label,
+            status: 'added',
+            children: []
+          });
+        });
+
+        updatedNode.children = currentChildren;
+        return updatedNode;
+      };
+
+      const newRootNode = injectStatusIntoTree(mindmapData.rootNode);
+
+      const updateMapWithNewTree = (map) => ({
+        ...map,
+        rootNode: newRootNode
+      });
+
+      setMindmapData(prev => (prev && prev.id === targetMapId) ? updateMapWithNewTree(prev) : prev);
+      setMapsList(prevList => prevList.map(map => map.id === targetMapId ? updateMapWithNewTree(map) : map));
+
+      setLoading(false);
       return;
     } catch (error) {
-      console.warn(`Modell ${modelName} fehlgeschlagen. Fehler: ${error.message || error}`); /////////////TEST////////////
-      
+      console.warn(`Modell ${modelName} fehlgeschlagen. Fehler: ${error.message || error}`);
       continue; 
     }
   }
-
+  setLoading(false);
   throw new Error("Alle verfügbaren Gemini-Modelle sind derzeit ausgelastet (503).");
 }
+
+
+useEffect(() => {
+    const processDecisions = (nodeIdsArray, accepted) => {
+      const applyDecisionsToTree = (map) => {
+        if (!map || !map.rootNode) return map;
+
+        const cleanTreeRecursive = (node) => {
+          if (!node) return null;
+
+          let processedChildren = node.children 
+            ? node.children.flatMap(child => {
+                const res = cleanTreeRecursive(child);
+                return Array.isArray(res) ? res : (res ? [res] : []);
+              })
+            : [];
+
+          // 2. Wenn dieser Knoten von der Entscheidung betroffen ist
+          if (nodeIdsArray.includes(node.id)) {
+            if (accepted) {
+              // ANGENOMMEN:
+              if (node.status === 'deleted') {
+                return processedChildren; 
+              }
+              if (node.status === 'updated') {
+                return {
+                  ...node,
+                  status: null,
+                  oldLabel: undefined,
+                  children: processedChildren
+                };
+              }
+              if (node.status === 'added') {
+                return {
+                  ...node,
+                  status: null,
+                  children: processedChildren
+                };
+              }
+            } else {
+              // ABGELEHNT:
+              if (node.status === 'added') {
+                return null; // Neu hinzugefügter Vorschlag fliegt mitsamt seinen Kindern raus
+              }
+              if (node.status === 'updated') {
+                return {
+                  ...node,
+                  label: node.oldLabel || node.label,
+                  status: null,
+                  oldLabel: undefined,
+                  children: processedChildren
+                };
+              }
+              if (node.status === 'deleted') {
+                return {
+                  ...node,
+                  status: null,
+                  children: processedChildren
+                };
+              }
+            }
+          }
+
+          // 3. Wenn nicht direkt betroffen, normalen Knoten mit verarbeiteten Kindern zurückgeben
+          return {
+            ...node,
+            children: processedChildren
+          };
+        };
+
+        const safeMapChildren = (rootNode) => {
+          if (!rootNode) return null;
+          return {
+            ...rootNode,
+            children: rootNode.children 
+              ? rootNode.children.flatMap(child => {
+                  const res = cleanTreeRecursive(child);
+                  return Array.isArray(res) ? res : (res ? [res] : []);
+                })
+              : []
+          };
+        };
+
+        return {
+          ...map,
+          rootNode: safeMapChildren(map.rootNode)
+        };
+      };
+
+      setMindmapData(prev => prev ? applyDecisionsToTree(prev) : prev);
+      setMapsList(prevList => prevList.map(map => applyDecisionsToTree(map)));
+    };
+
+    const handleSingle = (e) => {
+      const { nodeId, accepted } = e.detail;
+      processDecisions([nodeId], accepted);
+    };
+
+    const handleBulk = (e) => {
+      const { nodeIds, accepted } = e.detail;
+      processDecisions(nodeIds, accepted);
+    };
+
+    window.addEventListener('proposalDecision', handleSingle);
+    window.addEventListener('bulkProposalDecision', handleBulk);
+
+    return () => {
+      window.removeEventListener('proposalDecision', handleSingle);
+      window.removeEventListener('bulkProposalDecision', handleBulk);
+    };
+  }, []);
+
+
 
   const handleUpdateSelectedNodes = (field, value) => {
     console.log("Updating nodes: ", field, value, selectedNodeIds);
@@ -326,24 +513,81 @@ function App() {
           </div>
         )}
 
+      {/* Eingabeleiste Komponente Start */}
         {mindmapData?.name && (
-            <button 
-              onClick={expandMindmap} 
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            background: 'var(--code-bg)',
+            border: '1px solid var(--border)',
+            borderRadius: '12px',
+            padding: '6px 12px',
+            margin: '1rem 0 0 0',
+            // width: '100%',
+            // maxWidth: '700px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
+            transition: 'border-color 0.2s'
+          }}>
+            <input
+              type="text"
+              placeholder={selectedNodeIds.length > 1 
+                ? `${selectedNodeIds.length} markierte Knoten bearbeiten` 
+                : selectedNodeIds.length === 1 ?
+                  "1 markierten Knoten bearbeiten"
+                  : selectedNodeIds.length === 0
+                  ? "keine Knoten ausgewählt"
+                    : ""
+              }
+              value={userInput}
+              onChange={(e) => setUserInput(e.target.value)}
               disabled={loading}
-              style={{
-                padding: '12px 24px',
-                margin: '1rem 0',
-                fontSize: '16px',
-                backgroundColor: 'var(--accent)',
-                color: '#fff',
-                border: 'none',
-                borderRadius: '8px',
-                cursor: 'pointer'
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && userInput.trim().length > 0 && !loading){
+                  expandMindmap();
+                }
               }}
-            >
-              {loading ? 'Erstelle Ast...' : 'Mit KI erweitern'}
-            </button>
-          )}
+              style={{
+                flex: 1,
+                border: 'none',
+                background: 'transparent',
+                padding: '10px 6px',
+                fontSize: '15px',
+                color: 'var(--text-h)',
+                outline: 'none',
+              }}
+            />
+            
+              <button
+                onClick={expandMindmap}
+                disabled={loading || userInput.trim().length === 0}
+                style={{
+                  padding: '10px 12px',
+                  backgroundColor: loading || userInput.trim().length === 0 ? 'var(--border)' : 'var(--accent)',
+                  color: loading || userInput.trim().length === 0 ? '#808080' : '#fff',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  transition: 'all 0.2s'
+                }}
+              >
+                {loading ? (
+                  'Denke nach...'
+                ) : (
+                  <>
+                    <span>Senden</span>
+                    <SendHorizontal size={16} />
+                  </>
+                )}
+              </button>
+          </div>
+        )}
+        {/* Eingabeleiste Komponente Ende */}
       </div>
       
       <SidebarRight 

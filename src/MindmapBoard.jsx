@@ -8,57 +8,183 @@ import {
   useEdgesState,
   applyNodeChanges,
   ReactFlowProvider,
-  useReactFlow
+  useReactFlow,
+  Handle,
+  Position
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { getLayoutedElements } from './utils/layout';
+import { Check, X } from 'lucide-react';
 
+const nodeTypes = {
+  proposalNode: ProposalNode
+};
 
  
 // Diese Funktion verwandelt das verschachtelte KI-JSON rekursiv in flache React-Flow-Daten
 function convertTreeToFlow(node, parentId = null, elements = { nodes: [], edges: [] }) {
-  const borderColor = node.borderColor || 'var(--default-node-border)';
-  const hasCustomColor = node.borderColor && node.borderColor !== 'var(--default-node-border)';
+  if (!node) return elements;
 
-  const backgroundColor = hasCustomColor 
+  // VERHINDERT DUBLETTEN: Falls der Knoten bereits existiert, überspringen
+  if (elements.nodes.some(n => n.id === node.id)) {
+    return elements;
+  }
+
+  let borderColor = node.borderColor || 'var(--default-node-border)';
+  let backgroundColor = node.borderColor && node.borderColor !== 'var(--default-node-border)'
     ? `${borderColor}40`
     : `color-mix(in srgb, var(--default-node-border) 25%, transparent)`;
+  let edgeStyle = { stroke: 'var(--text)' };
+  let edgeAnimated = false;
+
+  const isProposal = !!node.status;
+
+  // Farb- und Stylingzuordnung basierend auf dem Knoten-Status
+  if (node.status === 'updated') {
+    borderColor = '#3b82f6'; // Blau
+    backgroundColor = 'rgba(59, 130, 246, 0.15)';
+  } else if (node.status === 'deleted') {
+    borderColor = '#ef4444'; // Rot
+    backgroundColor = 'rgba(239, 68, 68, 0.15)';
+    edgeStyle = { stroke: '#ef4444', strokeDasharray: '5,5' };
+  } else if (node.status === 'added') {
+    borderColor = '#22c55e'; // Grün
+    backgroundColor = 'rgba(34, 197, 94, 0.15)';
+    edgeStyle = { stroke: '#22c55e', strokeWidth: 2 };
+    edgeAnimated = true;
+  }
+
+  const isRootNode = node.id === 'root';
 
   elements.nodes.push({
     id: node.id,
-    data: { label: node.label },
-    position: { x: 0, y: 0 }, 
+    type: !!node.status ? 'proposalNode' : 'default',
+    data: { 
+      label: node.label, 
+      status: node.status, 
+      oldLabel: node.oldLabel 
+    },
+    position: { x: 0, y: 0 },
     style: {
       background: backgroundColor,
       color: 'var(--text-h)',
-      border: `1px solid ${borderColor}`,
+      border: isRootNode ? `4px solid ${borderColor}` : `2px solid ${borderColor}`,
       borderRadius: '8px',
       padding: '10px',
-      boxShadow: 'var(--shadow)',
-      transition: 'background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease',
-      wordBreak: 'break-word',
-      overflowWrap: 'break-word',
-    }
+      fontWeight: isRootNode ? '800' : 'normal',
+      fontSize: isRootNode ? '16px' : '14px'
+    },
   });
 
-  // 2. Verbindungslinie vom Vater zum Kind bauen
   if (parentId) {
-    elements.edges.push({
-      id: `e-${parentId}-${node.id}`,
-      source: parentId,
-      target: node.id,
-      animated: true,
-      style: { stroke: 'var(--accent)' }
-    });
+    const edgeId = `e-${parentId}-${node.id}`;
+    if (!elements.edges.some(e => e.id === edgeId)) {
+      elements.edges.push({
+        id: edgeId,
+        source: parentId,
+        target: node.id,
+        style: edgeStyle,
+        animated: edgeAnimated
+      });
+    }
   }
 
-  // 3. Rekursiv durch alle Kinder gehen
-  if (node.children && Array.isArray(node.children)) {
+  // Rekursiv die echten Kinder im Baum weiterverarbeiten
+  if (node.children) {
     node.children.forEach(child => convertTreeToFlow(child, node.id, elements));
   }
 
   return elements;
 }
+
+function ProposalNode({ id, data }) {
+  const handleDecision = (accepted) => {
+    window.dispatchEvent(new CustomEvent('proposalDecision', {
+      detail: { nodeId: id, accepted } // Übergibt die ID des Knotens direkt
+    }));
+  };
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <div style={{
+        position: 'absolute', top: '-45px', left: '50%', transform: 'translateX(-50%)',
+        background: 'none', border: 'none',
+        padding: '4px', display: 'flex', gap: '6px', fontSize: '12px'
+      }}>
+        <button
+          onClick={() => handleDecision(true)}
+          style={{ 
+            border: '1px solid var(--accent)', 
+            background: 'var(--default-node-border)',
+            boxShadow: '0 8px 10px rgba(0,0,0,0.15)',
+            cursor: 'pointer',
+            fontSize: '14px',
+            padding: '6px',
+            borderRadius: '6px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transition: 'all 0.2s ease',
+            width: '32px',
+            height: '32px',
+            zIndex: 100
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'scale(1)';
+            e.currentTarget.style.background = 'rgb(110, 185, 139)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'scale(1)';
+            e.currentTarget.style.background = 'var(--default-node-border)';
+          }}
+          >
+            <Check size={15} strokeWidth={2.5}/>
+        </button>
+        <button
+          onClick={() => handleDecision(false)}
+          style={{ 
+            border: '1px solid var(--accent)', 
+            background: 'var(--default-node-border)',
+            boxShadow: '0 8px 10px rgba(0,0,0,0.15)',
+            cursor: 'pointer',
+            fontSize: '14px',
+            padding: '6px',
+            borderRadius: '6px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transition: 'all 0.2s ease',
+            width: '32px',
+            height: '32px',
+            zIndex: 100
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'scale(1)';
+            e.currentTarget.style.background = 'rgb(163, 82, 82)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'scale(1)';
+            e.currentTarget.style.background = 'var(--default-node-border)';
+          }}
+          >
+            <X size={15} strokeWidth={2.5}/>
+        </button>
+      </div>
+
+      <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
+      <div>
+        {data.status === 'updated' && data.oldLabel && (
+          <div style={{ fontSize: '10px', textDecoration: 'line-through', opacity: 0.5, marginBottom: '2px' }}>
+            {data.oldLabel}
+          </div>
+        )}
+        <div style={{ fontWeight: '600' }}>{data.label}</div>
+      </div>
+      <Handle type="source" position={Position.Bottom} style={{ opacity: 0 }} />
+    </div>
+  );
+}
+
 
 function MindmapBoardContent({ rawData, currentFileName, positions, setMindmapData, onNodesSelect, selectedNodeIds = [] }) {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
@@ -70,17 +196,17 @@ function MindmapBoardContent({ rawData, currentFileName, positions, setMindmapDa
     positionsRef.current = positions;
   }, [positions]);
 
-  useEffect(() => {
-  if (!currentFileName) return;
+  // useEffect(() => {
+  // if (!currentFileName) return;
 
-  const timer = setTimeout(() => {
-    if (typeof fitView === 'function') {
-      fitView({ padding: 0.2, duration: 0 });
-    }
-  }, 50);
+  // const timer = setTimeout(() => {
+  //   if (typeof fitView === 'function') {
+  //     fitView({ padding: 0.2, duration: 0 });
+  //   }
+  // }, 50);
 
-    return () => clearTimeout(timer);
-  }, [currentFileName, fitView]);
+  //   return () => clearTimeout(timer);
+  // }, [currentFileName, fitView]);
 
   const selectedNodeIdsRef = useRef(selectedNodeIds);
   useEffect(() => {
@@ -90,15 +216,9 @@ function MindmapBoardContent({ rawData, currentFileName, positions, setMindmapDa
   useEffect(() => {
     if (!rawData) return;
 
-    console.log("neu Update");
-
-    // 1. Konvertiere das Baum-JSON in flache Listen
-    const { nodes: flatNodes, edges: flatEdges } = convertTreeToFlow(rawData);
-    
-    // 2. Jag die Listen durch dagre für automatische Koordinaten
+    const { nodes: flatNodes, edges: flatEdges } = convertTreeToFlow(rawData, null, { nodes: [], edges: [] });
     const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(flatNodes, flatEdges);
 
-    // 3. Vorhandene gespeicherte Positionen anwenden
     const savedPositions = positionsRef.current || {};
     const currentSelectedIds = selectedNodeIdsRef.current || [];
 
@@ -107,58 +227,16 @@ function MindmapBoardContent({ rawData, currentFileName, positions, setMindmapDa
       if (savedPositions[node.id]) {
         baseNode.position = savedPositions[node.id];
       }
-      
       if (currentSelectedIds.includes(node.id)) {
         baseNode.selected = true;
       }
-
       return baseNode;
-      });
+    });
 
     setNodes(finalNodes);
     setEdges(layoutedEdges);
   }, [rawData, setNodes, setEdges]);
 
-  useEffect(() => {
-    if (!rawData) return;
-    
-    setNodes((currentNodes) =>
-      currentNodes.map((node) => {
-        // Wir durchsuchen rekursiv den aktuellen rawData-Baum nach diesem Knoten
-        const findNodeInTree = (treeNode) => {
-          if (treeNode.id === node.id) return treeNode;
-          if (treeNode.children) {
-            for (const child of treeNode.children) {
-              const found = findNodeInTree(child);
-              if (found) return found;
-            }
-          }
-          return null;
-        };
-
-        const updatedData = findNodeInTree(rawData);
-        if (updatedData) {
-        // Gleiche Logik wie oben für konsistente Updates
-        const borderColor = updatedData.borderColor || 'var(--default-node-border)';
-        const hasCustomColor = updatedData.borderColor && updatedData.borderColor !== 'var(--default-node-border)';
-        const backgroundColor = hasCustomColor 
-          ? `${borderColor}40`
-          : `color-mix(in srgb, var(--default-node-border) 25%, transparent)`;
-
-        return {
-          ...node,
-          data: { ...node.data, label: updatedData.label },
-          style: { 
-            ...node.style, 
-            border: `1px solid ${borderColor}`,
-            background: backgroundColor
-          }
-        };
-      }
-      return node;
-    })
-    );
-  }, [rawData, setNodes]);
 
   const onNodesChangeCustom = (changes) => {
     setNodes((currentNodes) => applyNodeChanges(changes, currentNodes));
@@ -204,6 +282,20 @@ function MindmapBoardContent({ rawData, currentFileName, positions, setMindmapDa
     }
   };
 
+  const handleBulkDecision = (accepted) => {
+    // Finde alle ausgewählten Knoten, die ein aktives Status-Flag besitzen
+    const targetIds = nodes
+      .filter(node => selectedNodeIds.includes(node.id) && !!node.data?.status)
+      .map(node => node.id);
+
+    if (targetIds.length === 0) return;
+
+    // Feuert das Event mit dem Array aus IDs
+    window.dispatchEvent(new CustomEvent('bulkProposalDecision', {
+      detail: { nodeIds: targetIds, accepted }
+    }));
+  };
+
   useEffect(() => {
     const handleLiveUpdate = (e) => {
       const { nodeId, value } = e.detail;
@@ -234,21 +326,55 @@ function MindmapBoardContent({ rawData, currentFileName, positions, setMindmapDa
       onPointerDown={handlePointerDown}
       style={{ 
         width: '100%', 
-        height: '80vh', 
+        height: '100%', 
         border: '1px solid var(--border)', 
         borderRadius: '12px', 
         overflow: 'hidden', 
         marginTop: '0px', 
         userSelect: 'none',
-        display: 'flex' // NEU: Aktiviert Flexbox, damit Sidebar rechts daneben steht
+        display: 'flex'
       }}
     >
+      {/* BulkDecision */}
+      {nodes.some(n => selectedNodeIds.includes(n.id) && !!n.data?.status) && (
+        <div style={{
+          position: 'absolute', top: '15px', right: '35%', left: '35%', zIndex: 1000,
+          background: 'var(--code-bg)', border: '1px solid var(--border)',
+          borderRadius: '12px', padding: '10px 8px', display: 'flex', flexDirection: 'column', gap: '6px',
+          alignItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
+        }}>
+          <span style={{ fontSize: '14px', color: 'var(--text)' }}>
+            {
+              nodes.filter(n => selectedNodeIds.includes(n.id) && !!n.data?.status).length === 1 ? 'Einen Vorschlag:'
+                : `Alle ${nodes.filter(n => selectedNodeIds.includes(n.id) && !!n.data?.status).length} Vorschläge:`
+            }
+          </span>
+          <div style={{
+            gap: '10px',
+          }}>
+            <button
+              onClick={() => handleBulkDecision(true)}
+              style={{ cursor: 'pointer', background: '#22c55e', color: '#fff', border: 'none', padding: '6px 6px', margin: '0 4px', borderRadius: '4px', width: '7rem' }}
+            >
+              <span>Akzeptieren </span><Check size={15} strokeWidth={2.5} style={{ transform: 'translate(5px, 3px)' }}/>
+            </button>
+            <button
+              onClick={() => handleBulkDecision(false)}
+              style={{ cursor: 'pointer', background: '#ef4444', color: '#fff', border: 'none', padding: '6px 8px', margin: '0 4px', borderRadius: '4px', width: '7rem' }}
+            >
+              <span>Ablehnen</span><X size={15} strokeWidth={2.5} style={{ transform: 'translate(8px, 3px)' }}/>
+            </button>
+          </div>
+        </div>
+      )}
+      
       {/* ReactFlow in ein eigenes Flex-Container-Div packen */}
       <div style={{ flex: 1, height: '100%', position: 'relative' }}>
         <ReactFlow
           proOptions={proOptions}
           nodes={nodes}
           edges={edges}
+          nodeTypes={nodeTypes}
           onNodesChange={onNodesChangeCustom}
           onNodeDragStop={(event, node) => {
            setMindmapData((prev) => {
@@ -269,7 +395,7 @@ function MindmapBoardContent({ rawData, currentFileName, positions, setMindmapDa
           }}
           snapToGrid={true}
           snapGrid={[15, 15]}
-          fitView={true}
+          fitView={false}
           nodesDraggable={true}
           panOnDrag={false}
           zoomOnDoubleClick={false}
@@ -278,8 +404,8 @@ function MindmapBoardContent({ rawData, currentFileName, positions, setMindmapDa
           selectionOnDrag={true}
           selectionKeyCode={null}
           selectionMode='partial'
-          translateExtent={[[-1000, -1000], [2000, 2000]]}
-          nodeExtent={[[-1000, -1000], [2000, 2000]]}
+          translateExtent={[[-5000, -5000], [5000, 5000]]}
+          nodeExtent={[[-5000, -5000], [5000, 5000]]}
         >
           <Background color="var(--text)" gap={15} size={1.5} />
 
