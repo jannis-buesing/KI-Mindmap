@@ -39,10 +39,9 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--sans);
-  overflow: hidden; /* Verhindert hässliches Scrollen des gesamten Bildschirms */
+  overflow: hidden;
 }
 
-/* #root füllt jetzt den KOMPLETTEN Bildschirm für React Flow */
 #root {
   width: 100vw;
   height: 100vh;
@@ -95,13 +94,90 @@ code {
     font-size: 14px;
   }
 .btn_dreiPunkteMenu:hover, #btn_sidebarLeftToggle:hover {
-  background: var(--accent-border, #e2e8f0);
+  background: var(--accent, #e2e8f0);
 }
 .btn_dreiPunkteMenu:active, #btn_sidebarLeftToggle:active {
   transform: scale(0.92);
 }
 
 /* ===================== Buttons SideBarLeft Ende ======================== */
+
+
+/* ========================= Mindmap Start ======================== */
+
+#div_BulkDecisionParent {
+  transition: all 0.3s ease-in-out;
+}
+#div_BulkDecisionParent * {
+  transition: all 0.3s ease-in-out;
+}
+
+.span_BulkDecisionAkzeptierenAblehnen {
+  display: inline;
+}
+
+@media (max-width: 875px) {
+  .span_BulkDecisionAkzeptierenAblehnen {
+    display: none;
+  }
+}
+
+/* ========================== Mindmap Ende ========================== */
+
+/* ========================== Mindmap animationWelle Animation Start ======================== */
+
+@keyframes glossZufaellig {
+  0% { background-position: 125% 0%; }
+  35% { background-position: -25% 100%; }
+  100% { background-position: -25% 100%; }
+}
+
+.animationWelle {
+  transition: background 0.4s ease, transform 0.1s ease, border-color 0.4s ease;
+}
+
+.animationWelleLinks {
+  background: linear-gradient(
+    35deg,
+    rgba(110, 185, 139, 0.05) 20%,
+    rgba(110, 185, 139, 0.25) 40%,
+    rgb(110, 185, 139) 50%,
+    rgba(110, 185, 139, 0.25) 60%,
+    rgba(110, 185, 139, 0.05) 80%
+  );
+  background-size: 300% 100%;
+  animation: glossZufaellig 9s infinite ease-in-out;
+}
+
+.animationWelleRechts {
+  background: linear-gradient(
+    35deg,
+    rgba(163, 82, 82, 0.05) 20%,
+    rgba(163, 82, 82, 0.25) 40%,
+    rgb(163, 82, 82) 50%,
+    rgba(163, 82, 82, 0.25) 60%,
+    rgba(163, 82, 82, 0.05) 80%
+  );
+  background-size: 300% 100%;
+  animation: glossZufaellig 9s infinite ease-in-out;
+}
+
+.animationWelleLinks:hover {
+  background: rgb(110, 185, 139) !important;
+  border-color: rgb(110, 185, 139);
+}
+
+.animationWelleRechts:hover {
+  background: rgb(163, 82, 82) !important;
+  border-color: rgb(163, 82, 82);
+}
+
+.animationWelle:active {
+  transform: scale(0.97);
+}
+
+/* ========================== Mindmap animationWelle Animation Ende ======================== */
+
 
 
 /* =================== Selections in der Mindmap Start ====================== */

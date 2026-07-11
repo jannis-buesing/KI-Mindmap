@@ -41,14 +41,14 @@ function convertTreeToFlow(node, parentId = null, elements = { nodes: [], edges:
 
   // Farb- und Stylingzuordnung basierend auf dem Knoten-Status
   if (node.status === 'updated') {
-    borderColor = '#3b82f6'; // Blau
-    backgroundColor = 'rgba(59, 130, 246, 0.15)';
+    borderColor = '#eedf59';
+    backgroundColor = 'rgba(243, 246, 59, 0.15)';
   } else if (node.status === 'deleted') {
-    borderColor = '#ef4444'; // Rot
+    borderColor = '#ef4444';
     backgroundColor = 'rgba(239, 68, 68, 0.15)';
     edgeStyle = { stroke: '#ef4444', strokeDasharray: '5,5' };
   } else if (node.status === 'added') {
-    borderColor = '#22c55e'; // Grün
+    borderColor = '#22c55e';
     backgroundColor = 'rgba(34, 197, 94, 0.15)';
     edgeStyle = { stroke: '#22c55e', strokeWidth: 2 };
     edgeAnimated = true;
@@ -130,11 +130,9 @@ function ProposalNode({ id, data }) {
             zIndex: 100
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'scale(1)';
             e.currentTarget.style.background = 'rgb(110, 185, 139)';
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.transform = 'scale(1)';
             e.currentTarget.style.background = 'var(--default-node-border)';
           }}
           >
@@ -159,11 +157,9 @@ function ProposalNode({ id, data }) {
             zIndex: 100
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'scale(1)';
             e.currentTarget.style.background = 'rgb(163, 82, 82)';
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.transform = 'scale(1)';
             e.currentTarget.style.background = 'var(--default-node-border)';
           }}
           >
@@ -327,7 +323,7 @@ function MindmapBoardContent({ rawData, currentFileName, positions, setMindmapDa
       style={{ 
         width: '100%', 
         height: '100%', 
-        border: '1px solid var(--border)', 
+        outline: '1px solid var(--border)', 
         borderRadius: '12px', 
         overflow: 'hidden', 
         marginTop: '0px', 
@@ -335,38 +331,6 @@ function MindmapBoardContent({ rawData, currentFileName, positions, setMindmapDa
         display: 'flex'
       }}
     >
-      {/* BulkDecision */}
-      {nodes.some(n => selectedNodeIds.includes(n.id) && !!n.data?.status) && (
-        <div style={{
-          position: 'absolute', top: '15px', right: '35%', left: '35%', zIndex: 1000,
-          background: 'var(--code-bg)', border: '1px solid var(--border)',
-          borderRadius: '12px', padding: '10px 8px', display: 'flex', flexDirection: 'column', gap: '6px',
-          alignItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
-        }}>
-          <span style={{ fontSize: '14px', color: 'var(--text)' }}>
-            {
-              nodes.filter(n => selectedNodeIds.includes(n.id) && !!n.data?.status).length === 1 ? 'Einen Vorschlag:'
-                : `Alle ${nodes.filter(n => selectedNodeIds.includes(n.id) && !!n.data?.status).length} Vorschläge:`
-            }
-          </span>
-          <div style={{
-            gap: '10px',
-          }}>
-            <button
-              onClick={() => handleBulkDecision(true)}
-              style={{ cursor: 'pointer', background: '#22c55e', color: '#fff', border: 'none', padding: '6px 6px', margin: '0 4px', borderRadius: '4px', width: '7rem' }}
-            >
-              <span>Akzeptieren </span><Check size={15} strokeWidth={2.5} style={{ transform: 'translate(5px, 3px)' }}/>
-            </button>
-            <button
-              onClick={() => handleBulkDecision(false)}
-              style={{ cursor: 'pointer', background: '#ef4444', color: '#fff', border: 'none', padding: '6px 8px', margin: '0 4px', borderRadius: '4px', width: '7rem' }}
-            >
-              <span>Ablehnen</span><X size={15} strokeWidth={2.5} style={{ transform: 'translate(8px, 3px)' }}/>
-            </button>
-          </div>
-        </div>
-      )}
       
       {/* ReactFlow in ein eigenes Flex-Container-Div packen */}
       <div style={{ flex: 1, height: '100%', position: 'relative' }}>
@@ -424,6 +388,49 @@ function MindmapBoardContent({ rawData, currentFileName, positions, setMindmapDa
             }}
           />
         </ReactFlow>
+
+        {/* BulkDecision */}
+      {nodes.some(n => selectedNodeIds.includes(n.id) && !!n.data?.status) && (
+        <div
+          id='div_BulkDecisionParent' 
+          style={{
+            position: 'absolute', top: '0', left: '50%', transform: 'translate(-50%)', zIndex: 1000, 
+            background: 'var(--code-bg)', outline: '1px solid var(--border)',
+            borderRadius: '12px', padding: '10px 24px', display: 'flex', flexDirection: 'column', gap: '6px', justifyContent: 'center',
+            alignItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+        }}>
+          <span style={{ fontSize: '14px', color: 'var(--text)', whiteSpace: 'nowrap' }}>
+            {
+              nodes.filter(n => selectedNodeIds.includes(n.id) && !!n.data?.status).length === 1 ? 'Einen Vorschlag:'
+                : `Alle ${nodes.filter(n => selectedNodeIds.includes(n.id) && !!n.data?.status).length} Vorschläge:`
+            }
+          </span>
+          <div style={{
+            display: 'flex',
+            flexDirection: 'row',
+            justifyContent: 'center',
+            gap: '10px',
+            width: '100%'
+          }}>
+            <button
+              onClick={() => handleBulkDecision(true)}
+              className='animationWelle animationWelleLinks'
+              style={{ cursor: 'pointer', color: '#fff', border: '1px solid var(--accent)', 
+                      padding: '6px 12px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <span className='span_BulkDecisionAkzeptierenAblehnen'>Akzeptieren </span><Check size={15} strokeWidth={2.5} style={{ transform: 'translate(0px, 0px)' }}/>
+            </button>
+            <button
+              onClick={() => handleBulkDecision(false)}
+              className='animationWelle animationWelleRechts'
+              style={{ cursor: 'pointer', color: '#fff', border: '1px solid var(--accent)', 
+                      padding: '6px 12px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <span className='span_BulkDecisionAkzeptierenAblehnen'>Ablehnen</span><X size={15} strokeWidth={2.5} style={{ transform: 'translate(0px, 0px)' }}/>
+            </button>
+          </div>
+        </div>
+      )}
       </div>
     </div>
   );

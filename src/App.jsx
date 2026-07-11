@@ -487,7 +487,7 @@ useEffect(() => {
         hasPermission={hasPermission}
       />
 
-      <div style={{ flex: '1 1 20%', minWidth: '200px', padding: '30px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{ flex: '1 1 20%', minWidth: '240px', padding: '30px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             {!mindmapData?.name && <h1>KI Mindmap Studio</h1>}
@@ -520,14 +520,15 @@ useEffect(() => {
             alignItems: 'center',
             gap: '10px',
             background: 'var(--code-bg)',
-            border: '1px solid var(--border)',
+            outline: '1px solid var(--border)',
             borderRadius: '12px',
             padding: '6px 12px',
             margin: '1rem 0 0 0',
-            // width: '100%',
+            width: '100%',
             // maxWidth: '700px',
             boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
-            transition: 'border-color 0.2s'
+            transition: 'border-color 0.2s',
+            boxSizing: 'border-box'
           }}>
             <input
               type="text"
@@ -549,6 +550,7 @@ useEffect(() => {
               }}
               style={{
                 flex: 1,
+                minWidth: '0',
                 border: 'none',
                 background: 'transparent',
                 padding: '10px 6px',
@@ -563,11 +565,12 @@ useEffect(() => {
                 disabled={loading || userInput.trim().length === 0}
                 style={{
                   padding: '10px 12px',
+                  flexShrink: 0,
                   backgroundColor: loading || userInput.trim().length === 0 ? 'var(--border)' : 'var(--accent)',
                   color: loading || userInput.trim().length === 0 ? '#808080' : '#fff',
                   border: 'none',
                   borderRadius: '8px',
-                  cursor: 'pointer',
+                  cursor: loading || userInput.trim().length === 0 ? 'not-allowed' : 'pointer',
                   fontSize: '14px',
                   fontWeight: '600',
                   display: 'flex',

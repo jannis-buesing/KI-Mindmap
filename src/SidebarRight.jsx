@@ -78,14 +78,14 @@ export function SidebarRight({
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       style={{
-        width: isOpen ? "300px" : "20px",
-        maxWidth: isOpen ? "300px" : "20px",
+        width: isOpen ? "200px" : "20px",
+        maxWidth: isOpen ? "200px" : "20px",
         background: "var(--code-bg)",
         borderLeft: "1px solid var(--border)",
         display: "flex",
         flexDirection: "column",
         flex: "1 0 auto",
-        padding: isOpen ? "24px" : "0",
+        padding: isOpen ? "16px" : "0",
         boxSizing: "border-box",
         transition: "width 0.3s cubic-bezier(0.25, 1, 0.5, 1), padding 0.3s ease",
         position: "relative",
@@ -200,7 +200,7 @@ export function SidebarRight({
           <div style={{
             width: '100%',
             background: 'var(--bg)',
-            padding: '12px',
+            padding: '6px',
             border: '1px solid var(--border)',
             borderRadius: '8px',
             boxSizing: 'border-box'
@@ -208,7 +208,7 @@ export function SidebarRight({
             <div style={{ 
               display: 'grid', 
               gridTemplateColumns: 'repeat(4, 1fr)', 
-              gap: '8px', 
+              gap: '6px', 
               width: '100%',
               justifyItems: 'stretch'
             }}>
