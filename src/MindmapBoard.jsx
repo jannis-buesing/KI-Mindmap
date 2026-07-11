@@ -415,7 +415,7 @@ function MindmapBoardContent({ rawData, currentFileName, positions, setMindmapDa
             <button
               onClick={() => handleBulkDecision(true)}
               className='animationWelle animationWelleLinks'
-              style={{ cursor: 'pointer', color: '#fff', border: '1px solid var(--accent)', 
+              style={{ cursor: 'pointer', color: 'var(--text-h)', border: '1px solid var(--accent)', 
                       padding: '6px 12px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}
             >
               <span className='span_BulkDecisionAkzeptierenAblehnen'>Akzeptieren </span><Check size={15} strokeWidth={2.5} style={{ transform: 'translate(0px, 0px)' }}/>
@@ -423,7 +423,7 @@ function MindmapBoardContent({ rawData, currentFileName, positions, setMindmapDa
             <button
               onClick={() => handleBulkDecision(false)}
               className='animationWelle animationWelleRechts'
-              style={{ cursor: 'pointer', color: '#fff', border: '1px solid var(--accent)', 
+              style={{ cursor: 'pointer', color: 'var(--text-h)', border: '1px solid var(--accent)', 
                       padding: '6px 12px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}
             >
               <span className='span_BulkDecisionAkzeptierenAblehnen'>Ablehnen</span><X size={15} strokeWidth={2.5} style={{ transform: 'translate(0px, 0px)' }}/>

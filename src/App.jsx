@@ -567,7 +567,7 @@ useEffect(() => {
                   padding: '10px 12px',
                   flexShrink: 0,
                   backgroundColor: loading || userInput.trim().length === 0 ? 'var(--border)' : 'var(--accent)',
-                  color: loading || userInput.trim().length === 0 ? '#808080' : '#fff',
+                  color: loading || userInput.trim().length === 0 ? '#808080' : '#var(--text-h)',
                   border: 'none',
                   borderRadius: '8px',
                   cursor: loading || userInput.trim().length === 0 ? 'not-allowed' : 'pointer',
