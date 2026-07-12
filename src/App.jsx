@@ -24,6 +24,14 @@ function App() {
   const isRenamingRef = useRef(false);
   const [selectedNodes, setSelectedNodes] = useState([]); 
   const selectedNodeIds = selectedNodes.map(n => n.id);
+  const [userApiKey, setUserApiKey] = useState(() => {
+    const savedKey = localStorage.getItem('gemini_user_api_key');
+    return savedKey || '';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('gemini_user_api_key', userApiKey);
+  }, [userApiKey]);
 
   // 1. Beim Starten nachsehen, ob ein Ordner in IndexedDB schlummert
   useEffect(() => {
@@ -193,72 +201,39 @@ function App() {
     const targetMapId = mindmapData.id; 
     const currentPromptText = userInput;
 
-    const ai = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
-
-    const AVAILABLE_MODELS = [
-      'gemini-3.5-flash',
-      'gemini-3.1-flash-lite',
-      'gemini-2.5-flash',
-      'gemini-2.5-flash-lite'
-    ];
-
-    const prompt = `
-      Du bist ein meisterhafter, strukturierter Mindmap-Experte.
-      Deine Aufgabe ist es, die bestehende Mindmap basierend auf einer Benutzeranweisung gezielt zu verändern.
-      Du gibst AUSSCHLIESSLICH eine flache Liste von Änderungsbefehlen (Operations) als valides JSON-Objekt zurück.
-      Diese werden dann von der Anwendung direkt in den Mindmap-Baum übernommen.
-
-      Aktueller Mindmap-Baum (Kontext):
-      ${JSON.stringify(mindmapData.rootNode, null, 2)}
-
-      vom Nutzer aktuell markierte Knoten-IDs:
-      ${JSON.stringify(selectedNodeIds)}
-
-      Benutzeranweisung:
-      "${currentPromptText}"
-
-      Regeln für das JSON-Ausgabeformat:
-      - WICHTIG: Der zentrale Hauptknoten mit id: "root" darf NIEMALS den Status "deleted" erhalten!
-      - "type": Kann "added", "updated" oder "deleted" sein.
-      - Für "added": Erzeuge eine einzigartige "temporaryId" (z.B. "new_123") und gib die "parentId" an, also, zu welchem Elternknoten der neue Knoten gehört.
-      - Für "updated": Gib die "nodeId" an und liefere das neue "label" sowie das "oldLabel".
-      - Für "deleted": Gib nur die "nodeId" an, die gelöscht werden soll.
-
-      Beispiel für die exakte Struktur (Antworte NUR mit diesem JSON, kein Markdown, kein Text!):
-      {
-        "operations": [
-          { "type": "added", "parentId": "root", "temporaryId": "child_1", "label": "Neuer Unterpunkt" },
-          { "type": "updated", "nodeId": "child_2", "oldLabel": "Alter Name", "label": "Neuer Name" },
-          { "type": "deleted", "nodeId": "child_3" }
-        ]
-      }
-    `;
-
     setLoading(true);
     setUserInput('');
 
-    for(const modelName of AVAILABLE_MODELS){
-      try {
-      console.log(`Versuche Modell: ${modelName}...`); ///////////TEST///////////
-      
-      const model = ai.getGenerativeModel({ 
-          model: modelName, 
-          generationConfig: { responseMimeType: "application/json" }
-        });
+    try {
+      // Ruf unsere neue Vercel Serverless Function auf
+      const res = await fetch('/api/expandMindmap', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          rootNode: mindmapData.rootNode,
+          selectedNodeIds: selectedNodeIds,
+          userInput: currentPromptText,
+          userApiKey: userApiKey // Optional: Falls der User im UI einen eigenen Key eingetragen hat (Weg A)
+        })
+      });
 
-      const result = await model.generateContent(prompt);
-      const data = JSON.parse(result.response.text());
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Serverfehler beim Generieren der Mindmap.");
+      }
+
+      const data = await res.json();
       const operations = data.operations || [];
+      console.log("Erhaltene Operationen vom Server:", operations);
 
-      console.log(`Erhaltene Operationen:`, operations); ///////////TEST///////////
-      console.log(`Erfolg mit Modell: ${modelName}`); //////////////TEST////////////
-
+      // Im Baum speichern
       const injectStatusIntoTree = (node) => {
         if (!node) return null;
 
         let updatedNode = { ...node };
 
-        // Schauen, ob eine Operation diesen bestehenden Knoten betrifft (Update oder Delete)
         const op = operations.find(o => o.nodeId === node.id);
         if (op) {
           if (op.type === 'updated') {
@@ -271,10 +246,8 @@ function App() {
           }
         }
 
-        // Kinder verarbeiten
         let currentChildren = node.children ? node.children.map(injectStatusIntoTree) : [];
 
-        // Schauen, ob neue Kinder an DIESEN Knoten angehängt werden müssen (Added)
         const newChildrenOps = operations.filter(o => o.type === 'added' && o.parentId === node.id);
         newChildrenOps.forEach(newOp => {
           currentChildren.push({
@@ -300,15 +273,13 @@ function App() {
       setMapsList(prevList => prevList.map(map => map.id === targetMapId ? updateMapWithNewTree(map) : map));
 
       setLoading(false);
-      return;
+
     } catch (error) {
-      console.warn(`Modell ${modelName} fehlgeschlagen. Fehler: ${error.message || error}`);
-      continue; 
+      console.error("Fehler beim Erweitern der Mindmap:", error);
+      alert(`Fehler: ${error.message}`);
+      setLoading(false);
     }
   }
-  setLoading(false);
-  throw new Error("Alle verfügbaren Gemini-Modelle sind derzeit ausgelastet (503).");
-}
 
 
 useEffect(() => {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { PanelLeftClose, PanelLeftOpen, Settings, Info, FolderOpen, MoreVertical, Pencil, Trash, Plus } from "lucide-react";
 
 export function SidebarLeft({
@@ -17,6 +17,8 @@ export function SidebarLeft({
   const [editingName, setEditingName] = useState(null);
   const [tempName, setTempName] = useState("");
   const [isOpen, setIsOpen] = useState(true);
+  const [activePopup, setActivePopup] = useState(null); // 'info' | 'settings' | null
+  const activePopupRef = useRef(null);
 
   const activeMapObject = maps.find((m) => m.id === currentMap);
 
@@ -27,6 +29,16 @@ export function SidebarLeft({
         year: "2-digit",
       })
     : "--.--.--";
+
+  const handleButtonClick = (type) => {
+    setActivePopup(activePopup === type ? null : type);
+  };
+
+  useEffect(() => {
+    if (activePopup && activePopupRef.current) {
+      activePopupRef.current.focus();
+    }
+  }, [activePopup]);
 
   return (
     <div
@@ -333,6 +345,7 @@ export function SidebarLeft({
           {/* Auflistung Maps Ende */}
           {/* Einstellungen Start */}
           <div style={{
+            position: 'relative',
             display: 'flex',
             flexDirection: isOpen ? 'row' : 'column',
             justifyContent: 'flex-end',
@@ -342,20 +355,87 @@ export function SidebarLeft({
             paddingTop: '15px',
             borderTop: isOpen ? '1px solid var(--border)' : 'none'
           }}>
+            {activePopup && (
+              <div
+                className="sbl_popup_window"
+                ref={activePopupRef}
+                tabIndex={0}
+                onBlur={(e) => {
+                  if (!e.currentTarget.contains(e.relatedTarget)) {
+                    setActivePopup(null);
+                  }
+                }}
+                autoFocus
+                style={{
+                  position: 'absolute',
+                  bottom: isOpen ? 'calc(100% + 10px)' : '0',
+                  left: isOpen ? '0' : 'calc(100% + 15px)',
+                  width: isOpen ? '100%' : '240px',
+                  backgroundColor: 'var(--bg)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '8px',
+                  boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+                  padding: '14px',
+                  boxSizing: 'border-box',
+                  zIndex: 100,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '10px',
+                  animation: 'popupFadeIn 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
+                  outline: 'none'
+                }}
+              >
+                {/* Inhalt Info */}
+                {activePopup === 'info' && (
+                  <>
+                    <h3 style={{ fontSize: '15px', marginBottom: '4px' }}>Informationen</h3>
+                    <div style={{ fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <div><strong>Version:</strong> 1.0.0</div>
+                      <div><strong>Lokaler Ordner:</strong> {dirName || "Nicht verbunden"}</div>
+                      <div style={{ color: 'var(--text)', fontSize: '12px', marginTop: '4px', lineHeight: '135%' }}>
+                        Dieses Tool speichert Mindmaps als JSON direkt in deinem gewählten Verzeichnis.
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* Inhalt Settings */}
+                {activePopup === 'settings' && (
+                  <>
+                    <h3 style={{ fontSize: '15px', marginBottom: '4px' }}>Einstellungen</h3>
+                    <div style={{ fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                        <input type="checkbox" defaultChecked style={{ accentColor: 'var(--accent)' }} />
+                        <span>Automatisch speichern</span>
+                      </label>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                        <input type="checkbox" style={{ accentColor: 'var(--accent)' }} />
+                        <span>Gitter-Hintergrund</span>
+                      </label>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
             <button
               id="btn_sbl_info"
+              onClick={() => handleButtonClick('info')}
               title="Informationen"
               style={{
-                color: 'var(--text-h)'
+                color: 'var(--text-h)',
+                background: activePopup === 'info' ? 'var(--accent)' : ''
               }}
             >
               <Info/>
             </button>
             <button
               id="btn_sbl_settings"
+              onClick={() => handleButtonClick('settings')}
               title="Einstellungen"
               style={{
-                color: 'var(--text-h)'
+                color: 'var(--text-h)',
+                background: activePopup === 'settings' ? 'var(--accent)' : ''
               }}
             >
               <Settings/>
