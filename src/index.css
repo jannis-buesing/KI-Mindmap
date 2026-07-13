@@ -79,7 +79,7 @@ code {
   transition: 0.1s;
 }
 
-.btn_dreiPunkteMenu, #btn_sbl_Toggle, #btn_sbl_settings, #btn_sbl_info, #btn_ordnerWechselnSmall {
+.btn_32pxNormed, #spanIsDarkIndicator {
     background: none;
     border: none;
     cursor: pointer;
@@ -93,10 +93,10 @@ code {
     transition: background 0.2s, transform 0.1s;
     font-size: 14px;
   }
-.btn_dreiPunkteMenu:hover, #btn_sbl_Toggle:hover, #btn_sbl_settings:hover, #btn_sbl_info:hover, #btn_ordnerWechselnSmall:hover {
+.btn_32pxNormed:hover {
   background: var(--accent, #e2e8f0);
 }
-.btn_dreiPunkteMenu:active, #btn_sbl_Toggle:active, #btn_sbl_settings:active, #btn_sbl_info:active, #btn_ordnerWechselnSmall:active {
+.btn_32pxNormed:active {
   transform: scale(0.92);
 }
 

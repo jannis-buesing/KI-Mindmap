@@ -28,7 +28,55 @@ function App() {
     const savedKey = localStorage.getItem('gemini_user_api_key');
     return savedKey || '';
   });
+  const [userPickedAccentColor, setUserPickedAccentColor] = useState(() => {
+    const savedColors = localStorage.getItem('user_picked_accent_colors');
+    return savedColors ? JSON.parse(savedColors) : { light: '#aa3bff', dark: '#c084fc' };
+  });
 
+  // Akzentfarbe ändern
+  const [isDark, setIsDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = (e) => setIsDark(e.matches);
+    
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('user_picked_accent_colors', JSON.stringify(userPickedAccentColor));
+  }, [userPickedAccentColor]);
+
+  useEffect(() => {
+    const currentMode = isDark ? 'dark' : 'light';
+    const activeColor = userPickedAccentColor[currentMode];
+
+    document.documentElement.style.setProperty('--accent', activeColor);
+
+    const hexToRgb = (hex) => {
+      let shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
+      let fullHex = hex.replace(shorthandRegex, (m, r, g, b) => r + r + g + g + b + b);
+      let result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(fullHex);
+      return result ? {
+        r: parseInt(result[1], 16),
+        g: parseInt(result[2], 16),
+        b: parseInt(result[3], 16)
+      } : null;
+    };
+
+    const rgb = hexToRgb(activeColor);
+
+    if (rgb) {
+      const bgOpacity = isDark ? 0.15 : 0.1;
+      const borderOpacity = 0.5;
+
+      document.documentElement.style.setProperty('--accent-bg', `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${bgOpacity})`);
+      document.documentElement.style.setProperty('--accent-border', `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${borderOpacity})`);
+    }
+  }, [userPickedAccentColor, isDark]);
+
+  // User API-Key im Local Storage speichern
   useEffect(() => {
     localStorage.setItem('gemini_user_api_key', userApiKey);
   }, [userApiKey]);
@@ -219,12 +267,18 @@ function App() {
         })
       });
 
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || "Serverfehler beim Generieren der Mindmap.");
+      const responseText = await res.text();
+      let data;
+      try {
+        data = responseText ? JSON.parse(responseText) : {};
+      } catch (e) {
+        throw new Error(`Ungültige Serverantwort (kein JSON): ${responseText.substring(0, 100)}...`);
       }
 
-      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || `Serverfehler (${res.status}): ${res.statusText}`);
+      }
+      
       const operations = data.operations || [];
       console.log("Erhaltene Operationen vom Server:", operations);
 
@@ -456,6 +510,11 @@ useEffect(() => {
         onCreateMap={handleCreateMap}
         isSaved={isSaved}
         hasPermission={hasPermission}
+        userApiKey={userApiKey}
+        onUserApiKeyChange={setUserApiKey}
+        userPickedAccentColor={userPickedAccentColor}
+        setUserPickedAccentColor={setUserPickedAccentColor}
+        currentMode={isDark ? 'dark' : 'light'}
       />
 
       <div style={{ flex: '1 1 20%', minWidth: '240px', padding: '30px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -538,7 +597,7 @@ useEffect(() => {
                   padding: '10px 12px',
                   flexShrink: 0,
                   backgroundColor: loading || userInput.trim().length === 0 ? 'var(--border)' : 'var(--accent)',
-                  color: loading || userInput.trim().length === 0 ? '#808080' : '#var(--text-h)',
+                  color: loading || userInput.trim().length === 0 ? '#808080' : 'var(--text-h)',
                   border: 'none',
                   borderRadius: '8px',
                   cursor: loading || userInput.trim().length === 0 ? 'not-allowed' : 'pointer',

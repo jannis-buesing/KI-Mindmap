@@ -8,8 +8,6 @@ export default async function handler(request, response) {
 
   const { rootNode, selectedNodeIds, userInput, userApiKey } = request.body;
 
-  // 2. API-Schlüssel bestimmen (Weg A: User-Key vs. Weg B: Dein Vercel-Key)
-  // Vercel liest process.env.GEMINI_API_KEY sicher aus deinen Umgebungsvariablen
   const activeApiKey = userApiKey || process.env.GEMINI_API_KEY;
 
   if (!activeApiKey) {
@@ -17,6 +15,8 @@ export default async function handler(request, response) {
       error: "Kein API-Schlüssel konfiguriert. Bitte gib einen eigenen Schlüssel ein." 
     });
   }
+
+  console.log('benutzter API-Key: ', activeApiKey); ///////////////TEST /////////////
 
   // 3. Gemini initialisieren
   const ai = new GoogleGenerativeAI(activeApiKey);

@@ -1,5 +1,6 @@
 import { useRef, useState, useEffect } from "react";
-import { PanelLeftClose, PanelLeftOpen, Settings, Info, FolderOpen, MoreVertical, Pencil, Trash, Plus } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen, Settings, Info, Palette, Moon, Sun, RotateCcw, FolderOpen, MoreVertical, Pencil, Trash, Plus } from "lucide-react";
+import { HexColorPicker } from "react-colorful";
 
 export function SidebarLeft({
   dirName,
@@ -11,7 +12,12 @@ export function SidebarLeft({
   onRenameMap,
   onCreateMap,
   isSaved,
-  hasPermission, // NEU: Damit die Sidebar weiß, ob wir reaktivieren müssen
+  hasPermission,
+  userApiKey,
+  onUserApiKeyChange,
+  userPickedAccentColor,
+  setUserPickedAccentColor,
+  currentMode
 }) {
   const [activeMenu, setActiveMenu] = useState(null);
   const [editingName, setEditingName] = useState(null);
@@ -40,6 +46,13 @@ export function SidebarLeft({
     }
   }, [activePopup]);
 
+  const handleColorChange = (newHexColor) => {
+    setUserPickedAccentColor(prev => ({
+      ...prev,
+      [currentMode]: newHexColor
+    }));
+  };
+
   return (
     <div
       style={{
@@ -64,7 +77,7 @@ export function SidebarLeft({
       >
         {isOpen && <h2>Mindmaps</h2>}
 
-        <button onClick={() => setIsOpen(!isOpen)} id="btn_sbl_Toggle" title={isOpen ? 'Seitenleiste schließen' : 'Seitenleiste öffnen'} style={{ marginBottom: isOpen ? '0' : '1rem' }}>
+        <button onClick={() => setIsOpen(!isOpen)} className="btn_32pxNormed" title={isOpen ? 'Seitenleiste schließen' : 'Seitenleiste öffnen'} style={{ marginBottom: isOpen ? '0' : '1rem' }}>
           {isOpen ? (
             <PanelLeftClose/>
           ) : (
@@ -120,7 +133,7 @@ export function SidebarLeft({
         )}
         { !isOpen && (
           <button
-            id="btn_ordnerWechselnSmall"
+            className="btn_32pxNormed"
           >
             <FolderOpen style={{ width: '19px', height: '19px' }}/>
           </button>
@@ -302,7 +315,7 @@ export function SidebarLeft({
                             elternteil.focus();
                           }, 0);
                         }}
-                        className="btn_dreiPunkteMenu"
+                        className="btn_32pxNormed"
                         style={{
                           display:
                             activeMenu === map.id ? "none" : "inline-block",
@@ -319,7 +332,7 @@ export function SidebarLeft({
                             setTempName(map.name);
                             setActiveMenu(null);
                           }}
-                          className="btn_dreiPunkteMenu"
+                          className="btn_32pxNormed"
                         >
                           <Pencil/>
                         </button>
@@ -331,7 +344,7 @@ export function SidebarLeft({
                             onDeleteMap(map.id);
                             setActiveMenu(null);
                           }}
-                          className="btn_dreiPunkteMenu"
+                          className="btn_32pxNormed"
                         >
                           <Trash/>
                         </button>
@@ -361,6 +374,13 @@ export function SidebarLeft({
                 ref={activePopupRef}
                 tabIndex={0}
                 onBlur={(e) => {
+                  if (
+                    e.relatedTarget?.id === "btn_sbl_info" || 
+                    e.relatedTarget?.id === "btn_sbl_settings" ||
+                    e.relatedTarget?.id === "btn_sbl_palette"
+                  ) {
+                    return; 
+                  }
                   if (!e.currentTarget.contains(e.relatedTarget)) {
                     setActivePopup(null);
                   }
@@ -385,6 +405,68 @@ export function SidebarLeft({
                   outline: 'none'
                 }}
               >
+
+                {/* Inhalt Personalisierung */}
+                {activePopup === 'palette' && (
+                  <>
+                    <h3 style={{ fontSize: '15px', marginBottom: '4px' }}>Personalisierung</h3>
+                    <div style={{ fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <div style={{ 
+                        padding: '12px', 
+                        background: 'var(--code-bg)', 
+                        border: '1px solid var(--border)', 
+                        borderRadius: '8px' 
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                          <span style={{ display: 'block', fontSize: '13px', fontWeight: '600' }}>
+                            Akzentfarbe ändern
+                          </span>
+                          <button
+                            title="Auf Standardfarbe zurücksetzen"
+                            className="btn_32pxNormed"
+                            onClick={() => {
+                              const modeWord = currentMode === 'dark' ? 'dunklen' : 'hellen';
+                              const confirmed = window.confirm(`Möchtest du die Akzentfarbe für den ${modeWord} Modus wirklich auf die Standardfarbe zurücksetzen?`);
+                              
+                              if (confirmed) {
+                                const defaultColors = { light: '#aa3bff', dark: '#c084fc' };
+                                setUserPickedAccentColor(prev => ({
+                                  ...prev,
+                                  [currentMode]: defaultColors[currentMode]
+                                }));
+                              }
+                            }}
+                          >
+                            <RotateCcw/>
+                          </button>
+                        </div>
+                        
+                        {/* Der Picker bekommt jetzt nur den String des aktiven Modus */}
+                        <HexColorPicker 
+                          color={userPickedAccentColor[currentMode]} 
+                          onChange={handleColorChange}
+                          style={{ width: '100%', height: '140px' }}
+                        />
+
+                        {/* Der Status-Button als Modus-Indikator */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '12px' }}>
+                          <span style={{ fontSize: '12px', color: 'var(--text)', lineHeight: '120%' }}>
+                            Farbe gilt für das aktive Design:
+                          </span>
+                          <span
+                            id="spanIsDarkIndicator"
+                            style={{
+                              cursor: 'default'
+                            }}
+                          >
+                            {currentMode === 'dark' ? <Moon/> : <Sun/>}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+
                 {/* Inhalt Info */}
                 {activePopup === 'info' && (
                   <>
@@ -392,9 +474,6 @@ export function SidebarLeft({
                     <div style={{ fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                       <div><strong>Version:</strong> 1.0.0</div>
                       <div><strong>Lokaler Ordner:</strong> {dirName || "Nicht verbunden"}</div>
-                      <div style={{ color: 'var(--text)', fontSize: '12px', marginTop: '4px', lineHeight: '135%' }}>
-                        Dieses Tool speichert Mindmaps als JSON direkt in deinem gewählten Verzeichnis.
-                      </div>
                     </div>
                   </>
                 )}
@@ -404,14 +483,27 @@ export function SidebarLeft({
                   <>
                     <h3 style={{ fontSize: '15px', marginBottom: '4px' }}>Einstellungen</h3>
                     <div style={{ fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                        <input type="checkbox" defaultChecked style={{ accentColor: 'var(--accent)' }} />
-                        <span>Automatisch speichern</span>
-                      </label>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                        <input type="checkbox" style={{ accentColor: 'var(--accent)' }} />
-                        <span>Gitter-Hintergrund</span>
-                      </label>
+                      
+
+                      {/* API-Key Eingabefeld */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '6px' }}>
+                        <span style={{ fontWeight: '600', color: 'var(--text-h)' }}>Gemini API-Key:</span>
+                        <input 
+                          type="password" 
+                          placeholder="..." 
+                          value={userApiKey}
+                          onChange={(e) => onUserApiKeyChange(e.target.value)}
+                          style={{
+                            padding: '6px 8px',
+                            borderRadius: '4px',
+                            border: '1px solid var(--border)',
+                            background: 'var(--bg)',
+                            color: 'var(--text-h)',
+                            fontSize: '12px',
+                            outline: 'none'
+                          }}
+                        />
+                      </div>
                     </div>
                   </>
                 )}
@@ -419,6 +511,19 @@ export function SidebarLeft({
             )}
 
             <button
+              className="btn_32pxNormed"
+              id="btn_sbl_palette"
+              onClick={() => handleButtonClick('palette')}
+              title="Personalisierung"
+              style={{
+                color: 'var(--text-h)',
+                background: activePopup === 'palette' ? 'var(--accent)' : ''
+              }}
+            >
+              <Palette/>
+            </button>
+            <button
+              className="btn_32pxNormed"
               id="btn_sbl_info"
               onClick={() => handleButtonClick('info')}
               title="Informationen"
@@ -430,6 +535,7 @@ export function SidebarLeft({
               <Info/>
             </button>
             <button
+              className="btn_32pxNormed"
               id="btn_sbl_settings"
               onClick={() => handleButtonClick('settings')}
               title="Einstellungen"
