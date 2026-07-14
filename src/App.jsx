@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { Analytics } from "@vercel/analytics/next"
+import { Analytics } from "@vercel/analytics/react";
 import { MindmapBoard } from './MindmapBoard';
 import { SidebarLeft } from './SidebarLeft';
 import { SidebarRight } from './SidebarRight';
@@ -492,7 +492,7 @@ function App() {
 
   return (
     <div onContextMenu={keinContextMenu} style={{ display: 'flex', position: 'relative', flex: '1 1 auto', width: '100vw', height: '100vh', overflow: 'hidden' }}>
-
+      <Analytics/>
       {loading && (
         <style>{`
           * {
