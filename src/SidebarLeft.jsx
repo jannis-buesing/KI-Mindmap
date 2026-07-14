@@ -492,7 +492,7 @@ export function SidebarLeft({
                           type="password" 
                           placeholder="..." 
                           value={userApiKey}
-                          onChange={(e) => onUserApiKeyChange(e.target.value)}
+                          onChange={(e) => onUserApiKeyChange(e.target.value.trim())}
                           style={{
                             padding: '6px 8px',
                             borderRadius: '4px',

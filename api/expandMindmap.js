@@ -73,12 +73,17 @@ export default async function handler(request, response) {
       const result = await model.generateContent(prompt);
       const data = JSON.parse(result.response.text());
       
-      // Bei Erfolg: Direkt das JSON an das Frontend zurückgeben
       return response.status(200).json(data);
 
     } catch (error) {
       console.warn(`[Backend] Modell ${modelName} fehlgeschlagen: ${error.message || error}`);
-      // Versuche das nächste Modell in der Schleife
+
+      if (error.message?.includes("API_KEY_INVALID") || error.status === 400) {
+        return response.status(400).json({ 
+          error: "Der eingegebene API-Schlüssel ist ungültig."
+        });
+      }
+
       continue; 
     }
   }

@@ -174,7 +174,13 @@ function ProposalNode({ id, data }) {
             {data.oldLabel}
           </div>
         )}
-        <div style={{ fontWeight: '600' }}>{data.label}</div>
+        <div style={{ 
+          fontWeight: '600',
+          textDecoration: data.status === 'deleted' ? 'line-through' : 'none',
+          opacity: data.status === 'deleted' ? 0.8 : 1
+        }}>
+          {data.label}
+        </div>
       </div>
       <Handle type="source" position={Position.Bottom} style={{ opacity: 0 }} />
     </div>

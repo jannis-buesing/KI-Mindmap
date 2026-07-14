@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { Analytics } from "@vercel/analytics/next"
 import { MindmapBoard } from './MindmapBoard';
 import { SidebarLeft } from './SidebarLeft';
 import { SidebarRight } from './SidebarRight';
@@ -263,7 +264,7 @@ function App() {
           rootNode: mindmapData.rootNode,
           selectedNodeIds: selectedNodeIds,
           userInput: currentPromptText,
-          userApiKey: userApiKey // Optional: Falls der User im UI einen eigenen Key eingetragen hat (Weg A)
+          userApiKey: userApiKey.trim()
         })
       });
 
@@ -331,12 +332,13 @@ function App() {
     } catch (error) {
       console.error("Fehler beim Erweitern der Mindmap:", error);
       alert(`Fehler: ${error.message}`);
+      setUserInput(userInput);
       setLoading(false);
     }
   }
 
 
-useEffect(() => {
+  useEffect(() => {
     const processDecisions = (nodeIdsArray, accepted) => {
       const applyDecisionsToTree = (map) => {
         if (!map || !map.rootNode) return map;
