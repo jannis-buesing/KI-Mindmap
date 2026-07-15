@@ -130,7 +130,7 @@ export function SidebarRight({
         </div>
 
         {/* 1. EIGENSCHAFT: NAME / LABEL */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+        {/* <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
           <label
             style={{
               fontSize: "12px",
@@ -182,8 +182,9 @@ export function SidebarRight({
               transition: "border-color 0.2s",
             }}
           />
-        </div>
+        </div> */}
 
+        {/* Farben */}
         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
           <label
             style={{
@@ -253,7 +254,7 @@ export function SidebarRight({
       </div>
 
         {/* REIN INFORMATIVE ID-LISTE IM FUSSBEREICH */}
-        <div
+        {/* <div
           style={{
             display: "flex",
             flexDirection: "column",
@@ -296,7 +297,7 @@ export function SidebarRight({
               </code>
             ))}
           </div>
-        </div>
+        </div> */}
       </div>
 
       {/* MINIMALER IDE-INDIKATOR WENN GESCHLOSSEN */}

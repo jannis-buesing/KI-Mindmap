@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect } from "react";
-import { PanelLeftClose, PanelLeftOpen, Settings, Info, Palette, Moon, Sun, RotateCcw, FolderOpen, MoreVertical, Pencil, Trash, Plus } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen, Settings, Info, Palette, Moon, Sun, RotateCcw, FolderOpen, MoreVertical, PencilLine, Trash, Plus } from "lucide-react";
 import { HexColorPicker } from "react-colorful";
 
 export function SidebarLeft({
@@ -334,7 +334,7 @@ export function SidebarLeft({
                           }}
                           className="btn_32pxNormed"
                         >
-                          <Pencil/>
+                          <PencilLine/>
                         </button>
                       )}
                       {activeMenu === map.id && (

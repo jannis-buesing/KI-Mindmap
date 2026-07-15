@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { Analytics } from "@vercel/analytics/react";
 import { MindmapBoard } from './MindmapBoard';
+import { Eingabeleiste } from './Eingabeleiste';
 import { SidebarLeft } from './SidebarLeft';
 import { SidebarRight } from './SidebarRight';
 import { 
@@ -11,7 +12,6 @@ import {
   deleteMindmapFile,
   getStoredDirectoryHandle
 } from './utils/fileSystem';
-import { SendHorizontal } from 'lucide-react';
 
 function App() {
   const [dirHandle, setDirHandle] = useState(null);
@@ -216,28 +216,37 @@ function App() {
     if (!foundMap) return;
     if (foundMap.name === newName) return;
 
-    isRenamingRef.current = true;
+    try {
+      isRenamingRef.current = true;
 
-    const fileHandle = await dirHandle.getFileHandle(`${foundMap.name}.json`);
-    const file = await fileHandle.getFile();
-    const text = await file.text();
-    const data = JSON.parse(text);
+      const fileHandle = await dirHandle.getFileHandle(`${foundMap.name}.json`);
+      const file = await fileHandle.getFile();
+      const text = await file.text();
+      const data = JSON.parse(text);
 
-    const updatedData = {
-      ...data,
-      name: newName
+      const updatedData = {
+        ...data,
+        name: newName
+      }
+
+      await saveMindmapToFile(dirHandle, newName, updatedData, true);
+      await deleteMindmapFile(dirHandle, foundMap.name);
+
+      const files = await loadMindmapsFromDirectory(dirHandle);
+      setMapsList(files);
+
+      if (mindmapData?.id === id) {
+        const updatedFileInfo = files.find(f => f.id === id);
+        setMindmapData({ 
+          ...updatedData, 
+          _currentFileName: updatedFileInfo?.name || newName 
+        });
+      }
+    } catch (error) {
+      console.error("Fehler beim Umbenennen der Mindmap:", error);
+    } finally {
+      isRenamingRef.current = false;
     }
-
-    await saveMindmapToFile(dirHandle, newName, updatedData, true);
-    await deleteMindmapFile(dirHandle, foundMap.name);
-
-    const files = await loadMindmapsFromDirectory(dirHandle);
-    setMapsList(files);
-
-    if (mindmapData?.id === id) {
-      const updatedFileInfo = files.find(f => f.id === id);
-      setMindmapData({ ...updatedData, _currentFileName: updatedFileInfo?.name || newName });
-  }
   }
 
   // 8. KI Generierung
@@ -490,6 +499,7 @@ function App() {
     event.preventDefault();
   }
 
+  // ================================================================= RETURN ======================================================================================
   return (
     <div onContextMenu={keinContextMenu} style={{ display: 'flex', position: 'relative', flex: '1 1 auto', width: '100vw', height: '100vh', overflow: 'hidden' }}>
       <Analytics/>
@@ -546,82 +556,14 @@ function App() {
         )}
 
       {/* Eingabeleiste Komponente Start */}
-        {mindmapData?.name && (
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            background: 'var(--code-bg)',
-            outline: '1px solid var(--border)',
-            borderRadius: '12px',
-            padding: '6px 12px',
-            margin: '1rem 0 0 0',
-            width: '100%',
-            // maxWidth: '700px',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
-            transition: 'border-color 0.2s',
-            boxSizing: 'border-box'
-          }}>
-            <input
-              type="text"
-              placeholder={selectedNodeIds.length > 1 
-                ? `${selectedNodeIds.length} markierte Knoten bearbeiten` 
-                : selectedNodeIds.length === 1 ?
-                  "1 markierten Knoten bearbeiten"
-                  : selectedNodeIds.length === 0
-                  ? "keine Knoten ausgewählt"
-                    : ""
-              }
-              value={userInput}
-              onChange={(e) => setUserInput(e.target.value)}
-              disabled={loading}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && userInput.trim().length > 0 && !loading){
-                  expandMindmap();
-                }
-              }}
-              style={{
-                flex: 1,
-                minWidth: '0',
-                border: 'none',
-                background: 'transparent',
-                padding: '10px 6px',
-                fontSize: '15px',
-                color: 'var(--text-h)',
-                outline: 'none',
-              }}
-            />
-            
-              <button
-                onClick={expandMindmap}
-                disabled={loading || userInput.trim().length === 0}
-                style={{
-                  padding: '10px 12px',
-                  flexShrink: 0,
-                  backgroundColor: loading || userInput.trim().length === 0 ? 'var(--border)' : 'var(--accent)',
-                  color: loading || userInput.trim().length === 0 ? '#808080' : 'var(--text-h)',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: loading || userInput.trim().length === 0 ? 'not-allowed' : 'pointer',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  transition: 'all 0.2s'
-                }}
-              >
-                {loading ? (
-                  'Denke nach...'
-                ) : (
-                  <>
-                    <span>Senden</span>
-                    <SendHorizontal size={16} />
-                  </>
-                )}
-              </button>
-          </div>
-        )}
+        <Eingabeleiste 
+          userInput={userInput}
+          setUserInput={setUserInput}
+          loading={loading}
+          expandMindmap={expandMindmap}
+          selectedNodeIds={selectedNodeIds}
+          mindmapData={mindmapData}
+        />
         {/* Eingabeleiste Komponente Ende */}
       </div>
       
