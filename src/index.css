@@ -207,16 +207,16 @@ code {
 }
 
 /* ausgewählte Nodes */
+.react-flow__node,
 .react-flow__node.selected,
 .react-flow__node.selected:focus,
 .react-flow__node.selected:focus-visible,
 .react-flow__node:hover,
-.react-flow__node:active
- {
-  border-color: var(--accent-border) !important;
-  box-shadow: 0 0 0 2px var(--accent) !important;
+.react-flow__node:active {
+  border: none !important;
+  background: none !important;
+  box-shadow: none !important;
   outline: none !important;
-  transition: border-color 0.1s ease, box-shadow 0.3s ease;
 }
 
 .react-flow__node.selected *,

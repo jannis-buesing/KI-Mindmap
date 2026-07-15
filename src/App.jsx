@@ -367,6 +367,14 @@ function App() {
             if (accepted) {
               // ANGENOMMEN:
               if (node.status === 'deleted') {
+                // Root-Knoten darf nicht gelöscht werden
+                if (node.id === 'root') {
+                  return {
+                    ...node,
+                    status: null,
+                    children: processedChildren
+                  };
+                }
                 return processedChildren; 
               }
               if (node.status === 'updated') {
@@ -457,28 +465,184 @@ function App() {
     };
   }, []);
 
+  useEffect(() => {
+    const handleLiveLabel = (e) => {
+      const { nodeId, value } = e.detail;
+      handleUpdateSelectedNodes('label', value, nodeId);
+    };
 
+    const handleNodeDelete = (e) => {
+      const { nodeIds } = e.detail;
+      handleDeleteNodes(nodeIds);
+    };
 
-  const handleUpdateSelectedNodes = (field, value) => {
-    console.log("Updating nodes: ", field, value, selectedNodeIds);
-    // 1. Lokalen Zustand der ausgewählten Nodes sofort im UI spiegeln
-    setSelectedNodes(current => current.map(node => {
-      if (field === 'label') {
-        return { ...node, data: { ...node.data, label: value } };
+    const handleNodeCreate = (e) => {
+      const { position, parentId } = e.detail;
+      handleCreateNode(position, parentId);
+    };
+
+    window.addEventListener('reactflow-live-label', handleLiveLabel);
+    window.addEventListener('reactflow-nodes-delete', handleNodeDelete);
+    window.addEventListener('reactflow-node-create', handleNodeCreate);
+    return () => {
+      window.removeEventListener('reactflow-live-label', handleLiveLabel);
+      window.removeEventListener('reactflow-nodes-delete', handleNodeDelete);
+      window.removeEventListener('reactflow-node-create', handleNodeCreate);
+    };
+  }, []);
+
+  const handleCreateNode = (position, parentId) => {
+    const newNodeId = `node_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    const newNode = {
+      id: newNodeId,
+      label: 'Neuer Knoten',
+      children: []
+    };
+
+    setMindmapData((prev) => {
+      if (!prev) return prev;
+
+      let newRootNode = prev.rootNode;
+      let newFloatingNodes = [...(prev.floatingNodes || [])];
+
+      if (!parentId) {
+        // 1. KNOTEN HAT KEINEN ELTERNTEIL -> Als freien Knoten sichern
+        newFloatingNodes.push(newNode);
+      } else {
+        // 2. KNOTEN HAT EINEN ELTERNTEIL
+        const addNodeRecursive = (node) => {
+          if (!node) return null;
+          if (node.id === parentId) {
+            return {
+              ...node,
+              children: [...(node.children || []), newNode]
+            };
+          }
+          return {
+            ...node,
+            children: node.children ? node.children.map(addNodeRecursive) : []
+          };
+        };
+
+        const updatedRoot = addNodeRecursive(prev.rootNode);
+        
+        // OPTIMIERT: Referenzvergleich statt dem schweren JSON.stringify!
+        if (updatedRoot === prev.rootNode) {
+          // Der Elternknoten war nicht im Hauptbaum -> In floatingNodes suchen
+          newFloatingNodes = newFloatingNodes.map(node => addNodeRecursive(node)).filter(Boolean);
+        } else {
+          newRootNode = updatedRoot;
+        }
       }
-      if (field === 'borderColor') {
-        return { ...node, style: { ...node.style, borderColor: value } };
+
+      // Position für React Flow speichern
+      const newPositions = { ...prev.positions };
+      newPositions[newNodeId] = position;
+
+      return {
+        ...prev,
+        rootNode: newRootNode,
+        floatingNodes: newFloatingNodes,
+        positions: newPositions
+      };
+    });
+
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('reactflow-node-created', { detail: { nodeId: newNodeId } }));
+    }, 50);
+  };
+
+const handleDeleteNodes = (nodeIds) => {
+    if (!nodeIds || nodeIds.length === 0) return;
+    
+    const filteredIds = nodeIds.filter(id => id !== 'root');
+    if (filteredIds.length === 0) return;
+
+    setMindmapData((prev) => {
+      if (!prev) return prev;
+
+      // Hilfsfunktion zur Adoption/Hochstufung von Kindern
+      const pullUpChildrenRecursive = (node) => {
+        if (!node) return null;
+
+        let processedChildren = node.children
+          ? node.children.map(pullUpChildrenRecursive).filter(Boolean)
+          : [];
+
+        const finalChildren = [];
+        processedChildren.forEach(child => {
+          if (filteredIds.includes(child.id)) {
+            if (child.children && child.children.length > 0) {
+              finalChildren.push(...child.children);
+            }
+          } else {
+            finalChildren.push(child);
+          }
+        });
+
+        return {
+          ...node,
+          children: finalChildren
+        };
+      };
+
+      // 1. Hauptbaum verarbeiten
+      const newRootNode = pullUpChildrenRecursive(prev.rootNode);
+
+      // 2. Freie Knoten verarbeiten
+      let newFloatingNodes = [];
+      const currentFloating = prev.floatingNodes || [];
+
+      currentFloating.forEach(node => {
+        if (filteredIds.includes(node.id)) {
+          // Freier Knoten wird gelöscht -> Seine Kinder werden selbst zu neuen freien Knoten!
+          if (node.children && node.children.length > 0) {
+            // Wir müssen die Kinder rekursiv säubern, falls darin tiefere gelöscht wurden
+            const cleanedChildren = node.children.map(pullUpChildrenRecursive).filter(Boolean);
+            newFloatingNodes.push(...cleanedChildren);
+          }
+        } else {
+          // Freier Knoten bleibt, aber wir säubern seine Nachfahren
+          const cleanedNode = pullUpChildrenRecursive(node);
+          if (cleanedNode) {
+            newFloatingNodes.push(cleanedNode);
+          }
+        }
+      });
+
+      return {
+        ...prev,
+        rootNode: newRootNode || prev.rootNode,
+        floatingNodes: newFloatingNodes
+      };
+    });
+  };
+
+  const handleUpdateSelectedNodes = (field, value, targetNodeId = null) => {
+    console.log("Updating nodes: ", field, value, targetNodeId || selectedNodeIds);
+    
+    setSelectedNodes(current => current.map(node => {
+      const match = targetNodeId ? node.id === targetNodeId : selectedNodeIds.includes(node.id);
+      if (match) {
+        if (field === 'label') {
+          return { ...node, data: { ...node.data, label: value } };
+        }
+        if (field === 'borderColor') {
+          return { ...node, style: { ...node.style, borderColor: value } };
+        }
       }
       return node;
     }));
 
-    // 2. Den eigentlichen persistenten Mindmap-Baum aktualisieren
+    // 2. Persistenten Datenspeicher (Baum + Floating) aktualisieren
     setMindmapData((prev) => {
       if (!prev) return prev;
 
       const updateRecursive = (treeNode) => {
+        if (!treeNode) return null;
         let updatedNode = { ...treeNode };
-        if (selectedNodeIds.includes(treeNode.id)) {
+        const match = targetNodeId ? treeNode.id === targetNodeId : selectedNodeIds.includes(treeNode.id);
+        if (match) {
           if (field === 'label') updatedNode.label = value;
           if (field === 'borderColor') updatedNode.borderColor = value;
         }
@@ -490,7 +654,10 @@ function App() {
 
       return {
         ...prev,
-        rootNode: updateRecursive(prev.rootNode)
+        rootNode: updateRecursive(prev.rootNode),
+        floatingNodes: prev.floatingNodes 
+          ? prev.floatingNodes.map(updateRecursive) 
+          : []
       };
     });
   };
@@ -538,7 +705,7 @@ function App() {
 
         {mindmapData ? (
           <MindmapBoard 
-            rawData={mindmapData.rootNode}
+            rawData={mindmapData}
             currentFileName={mindmapData?.name}
             positions={mindmapData.positions} 
             setMindmapData={setMindmapData}
