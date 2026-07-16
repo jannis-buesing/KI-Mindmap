@@ -27,6 +27,11 @@ function EditableMindmapNode({ id, data, isConnectable, selected }) {
   const inputRef = useRef(null);
   const [isHovered, setIsHovered] = useState(false);
 
+  // EINE zentrale Definition der Breite als State
+  const [currentWidth, setCurrentWidth] = useState(data.width || 210); 
+  // Lokaler State für die dynamisch berechnete, genormte Höhe
+  const [measuredHeight, setMeasuredHeight] = useState(45);
+
   useEffect(() => {
     setValue(data.label || '');
   }, [data.label]);
@@ -76,7 +81,27 @@ function EditableMindmapNode({ id, data, isConnectable, selected }) {
   const isProposal = !!data.status;
   const nodeRef = useRef(null);
   const resizeHandleRef = useRef(null);
-  const [currentWidth, setCurrentWidth] = useState(data.width || 200);
+
+  // Dynamische Höhenberechnung basierend auf dem realen Inhalt
+  useEffect(() => {
+    if (!nodeRef.current) return;
+
+    // Wir suchen das Text-Container-Element (entweder die Vorschau oder das Textarea)
+    const contentContainer = nodeRef.current.querySelector('.node-content-wrapper');
+    if (!contentContainer) return;
+
+    // Ermittle die tatsächliche Höhe des Inhalts
+    const scrollHeight = contentContainer.scrollHeight;
+    
+    // Puffer für Padding (z.B. 10px oben, 10px unten = 20px) + Border
+    const totalRawHeight = scrollHeight + 20;
+
+    // Auf das nächste Vielfache von 15px aufrunden (Mindesthöhe 45px)
+    const gridSize = 15;
+    const snappedHeight = Math.max(Math.ceil(totalRawHeight / gridSize) * gridSize, 45);
+
+    setMeasuredHeight(snappedHeight);
+  }, [data.label, value, isEditing, currentWidth]);
 
   const calculateWidthLimits = () => {
     if (!nodeRef.current) return { min: 150, max: 600 };
@@ -87,7 +112,7 @@ function EditableMindmapNode({ id, data, isConnectable, selected }) {
     const words = (data.label || '').split(/\s+/);
     const longestWord = words.reduce((max, word) => word.length > max.length ? word : max, "");
 
-    // 1. Mindestbreite (Längstes Wort + Padding)
+    // Mindestbreite anhand des längsten Wortes messen
     const tempSpan = document.createElement("span");
     tempSpan.style.position = "absolute";
     tempSpan.style.visibility = "hidden";
@@ -96,24 +121,12 @@ function EditableMindmapNode({ id, data, isConnectable, selected }) {
     tempSpan.style.fontSize = getComputedStyle(labelDiv).fontSize;
     tempSpan.textContent = longestWord;
     document.body.appendChild(tempSpan);
-    const minWidth = tempSpan.offsetWidth + 40; // Genug Puffer für Padding
+    const minWidth = tempSpan.offsetWidth + 40; 
     document.body.removeChild(tempSpan);
 
-    // 2. Maximale Breite (Der gesamte Text in EINER Zeile, ohne Umbruch)
-    const tempSpanFull = document.createElement("span");
-    tempSpanFull.style.position = "absolute";
-    tempSpanFull.style.visibility = "hidden";
-    tempSpanFull.style.whiteSpace = "nowrap"; // Verhindert den Umbruch beim Messen der Max-Breite!
-    tempSpanFull.style.fontFamily = getComputedStyle(labelDiv).fontFamily;
-    tempSpanFull.style.fontSize = getComputedStyle(labelDiv).fontSize;
-    tempSpanFull.textContent = data.label || '';
-    document.body.appendChild(tempSpanFull);
-    const maxWidth = tempSpanFull.offsetWidth + 40;
-    document.body.removeChild(tempSpanFull);
-
-    // Grenzen auf ein Vielfaches von 15px runden für perfektes Snapping
-    const snapMin = Math.max(Math.ceil(minWidth / 15) * 15, 150);
-    const snapMax = Math.max(Math.ceil(maxWidth / 15) * 15, 600); // Erhöht auf 600 für mehr Spielraum
+    // Grenzen auf ein Vielfaches von 30px runden (für perfektes Handle-Snapping!)
+    const snapMin = Math.max(Math.ceil(minWidth / 30) * 30, 150);
+    const snapMax = 600; 
 
     return { min: snapMin, max: snapMax };
   };
@@ -124,7 +137,9 @@ function EditableMindmapNode({ id, data, isConnectable, selected }) {
     const { startX, startWidth, min, max } = resizeRef.current;
     const deltaX = moveEvent.clientX - startX;
     const rawWidth = startWidth + deltaX;
-    const snappedWidth = Math.round(rawWidth / 15) * 15;
+    
+    // EXAKT 30PX SPRÜNGE: Garantiert, dass Handles immer auf Grid-Linien bleiben!
+    const snappedWidth = Math.round(rawWidth / 30) * 30;
     const finalWidth = Math.min(max, Math.max(min, snappedWidth));
     
     resizeRef.current.finalWidth = finalWidth;
@@ -163,15 +178,17 @@ function EditableMindmapNode({ id, data, isConnectable, selected }) {
     window.addEventListener('mouseup', stopResizing);
   };
 
-  // Synchronisiert die lokale Breite, falls sie sich von außen ändert
   useEffect(() => {
-    setCurrentWidth(data.width || 200);
+    // Falls von außen eine nicht durch 30 teilbare Breite kommt, runden wir sie direkt
+    const externalWidth = data.width || 210;
+    const alignedWidth = Math.round(externalWidth / 30) * 30;
+    
+    setCurrentWidth(alignedWidth);
     if (nodeRef.current) {
-      nodeRef.current.style.width = `${data.width || 200}px`;
+      nodeRef.current.style.width = `${alignedWidth}px`;
     }
   }, [data.width]);
 
-  // Dynamische Styles basierend auf den von convertTreeToFlow übergebenen Werten
   const isRootNode = data.isRootNode;
   const borderColor = selected || isHovered
     ? 'var(--accent)' 
@@ -181,28 +198,34 @@ function EditableMindmapNode({ id, data, isConnectable, selected }) {
   return (
     <div 
       ref={nodeRef}
+      tabIndex={0}
       onDoubleClick={handleDoubleClick}
+      onKeyDown={(e) => {
+        if(e.key === 'F2'){
+          setIsEditing(true);
+        }
+      }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       style={{
         position: 'relative',
-        width: '100%', // Füllt den äußeren Wrapper perfekt aus
-        height: '100%', 
+        width: `${currentWidth}px`,
+        height: `${measuredHeight}px`, // Nutzt die genormte Inhaltshöhe
         display: 'flex', 
         flexDirection: 'column', 
         alignItems: 'center', 
         justifyContent: 'center',
-        padding: '10px 15px', // Padding jetzt direkt hier für sauberen Text-Abstand
-        boxSizing: 'border-box',
+        padding: '10px 15px', 
+        boxSizing: 'border-box', // Zurück zu border-box, da padding & border nun in die Höhenberechnung einfließen!
         background: backgroundColor,
         color: 'var(--text-h)',
-        border: isRootNode ? `4px solid ${borderColor}` : `2px solid ${borderColor}`,
+        border: `2px solid ${borderColor}`,
         borderRadius: '8px',
-        fontWeight: isRootNode ? '800' : 'normal',
-        fontSize: isRootNode ? '16px' : '14px',
+        fontWeight: isRootNode ? '1200' : 'normal',
+        fontSize: isRootNode ? '18px' : '14px',
         boxShadow: selected ? '0 0 0 2px var(--accent)' : 'none',
         cursor: isEditing ? 'text' : 'grab',
-        transition: 'border-color 0.1s ease, box-shadow 0.3s ease',
+        transition: 'border-color 0.1s ease, box-shadow 0.3s ease, height 0.15s ease-out',
       }}
     >
       {isProposal && (
@@ -210,7 +233,7 @@ function EditableMindmapNode({ id, data, isConnectable, selected }) {
           position: 'absolute', top: '-45px', left: '50%', transform: 'translateX(-50%)',
           background: 'none', border: 'none',
           padding: '4px', display: 'flex', gap: '6px', fontSize: '12px',
-          zIndex: 100
+          zIndex: 9999
         }}>
           <button
             onClick={(e) => { e.stopPropagation(); handleDecision(true); }}
@@ -227,14 +250,10 @@ function EditableMindmapNode({ id, data, isConnectable, selected }) {
               justifyContent: 'center',
               transition: 'all 0.2s ease',
               width: '32px',
-              height: '32px'
+              height: '32px',
             }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'rgb(110, 185, 139)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'var(--default-node-border)';
-            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgb(110, 185, 139)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--default-node-border)'; }}
           >
             <Check size={15} strokeWidth={2.5}/>
           </button>
@@ -255,27 +274,33 @@ function EditableMindmapNode({ id, data, isConnectable, selected }) {
               width: '32px',
               height: '32px'
             }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'rgb(163, 82, 82)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'var(--default-node-border)';
-            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgb(163, 82, 82)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--default-node-border)'; }}
           >
             <X size={15} strokeWidth={2.5}/>
           </button>
         </div>
       )}
 
-      {/* Symmetrische Handles direkt an den Außenkanten (ohne Verschiebung durch Padding) */}
+      {/* Symmetrische Handles direkt an den Außenkanten */}
       <Handle 
         type="target" 
         position={Position.Top} 
         isConnectable={isConnectable} 
-        style={{ opacity: 1, top: '-2px' }} 
+        style={{ opacity: 1, top: '-2px', background: 'var(--border)', width: '6px', height: '6px' }}
       />
 
-      <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+      {/* Neuer Wrapper mit eindeutiger Klasse zur Höhenmessung */}
+      <div
+        className="node-content-wrapper" 
+        style={{
+          width: '100%', 
+          height: '100%', 
+          display: 'flex', 
+          flexDirection: 'column', 
+          alignItems: 'center', 
+          justifyContent: 'center'
+        }}>
         {data.status === 'updated' && data.oldLabel && (
           <div style={{ fontSize: '10px', textDecoration: 'line-through', opacity: 0.5, marginBottom: '2px' }}>
             {data.oldLabel}
@@ -295,6 +320,8 @@ function EditableMindmapNode({ id, data, isConnectable, selected }) {
               padding: 0,
               margin: 0,
               width: '100%',
+              // Nutzt exakt dieselbe Höhe wie die Box (minus vertikales Padding)
+              height: '100%', 
               fontFamily: 'inherit',
               fontSize: 'inherit',
               fontWeight: 'inherit',
@@ -303,30 +330,40 @@ function EditableMindmapNode({ id, data, isConnectable, selected }) {
               resize: 'none',
               overflow: 'hidden',
               boxSizing: 'border-box',
+              
+              // Perfekte optische Synchronisation zur Vorschau:
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+              lineHeight: '1.4',
             }}
             rows={1}
           />
         ) : (
           <div className="node-label" style={{ 
             wordBreak: 'break-word', 
+            whiteSpace: 'pre-wrap',
             textAlign: 'center',
             fontWeight: isProposal ? '600' : 'normal',
             textDecoration: data.status === 'deleted' ? 'line-through' : 'none',
-            opacity: data.status === 'deleted' ? 0.8 : 1
+            opacity: data.status === 'deleted' ? 0.8 : 1,
+            lineHeight: '1.4',
+            width: '100%'
           }}>
             {data.label}
           </div>
         )}
       </div>
 
-      {/* Der Zieh-Balken liegt jetzt exakt über dem rechten Rand */}
       <div 
         ref={resizeHandleRef}
         onMouseDown={startResizing}
         className="nodrag"
         style={{
           position: 'absolute',
-          right: '-2px', // Schiebt ihn minimal nach außen über den echten Rahmen
+          right: '-5px', 
           top: 0,
           height: '100%',
           width: '10px',
@@ -334,17 +371,17 @@ function EditableMindmapNode({ id, data, isConnectable, selected }) {
           zIndex: 999,
         }}
       />
+      
       <Handle 
         type="source" 
         position={Position.Bottom} 
         isConnectable={isConnectable} 
-        style={{ opacity: 1, bottom: '-2px' }} 
+        style={{ opacity: 1, bottom: '-2px', background: 'var(--border)', width: '6px', height: '6px' }}
       />
     </div>
   );
 }
 
- 
 // Diese Funktion verwandelt das verschachtelte KI-JSON rekursiv in flache React-Flow-Daten
 function convertTreeToFlow(node, parentId = null, elements = { nodes: [], edges: [] }) {
   if (!node) return elements;
@@ -380,6 +417,9 @@ function convertTreeToFlow(node, parentId = null, elements = { nodes: [], edges:
 
     const isRootNode = node.id === 'root';
 
+    const rawWidth = node.width || 210;
+    const alignedWidth = Math.round(rawWidth / 30) * 30;
+
     elements.nodes.push({
       id: node.id,
       type: !!node.status ? 'proposalNode' : 'default',
@@ -395,15 +435,16 @@ function convertTreeToFlow(node, parentId = null, elements = { nodes: [], edges:
             detail: { nodeId, value: newValue }
           }));
         },
-        width: node.width || 200, // Standardbreite von 200px
+        width: alignedWidth,
       },
       position: { x: 0, y: 0 },
       style: {
-        width: node.width || 200,
+        width: alignedWidth,
         background: 'none',
         border: 'none',
         padding: 0,
         boxShadow: 'none',
+        zIndex: isProposal ? '1' : '0'
       },
     });
 
@@ -415,7 +456,7 @@ function convertTreeToFlow(node, parentId = null, elements = { nodes: [], edges:
         source: parentId,
         target: node.id,
         style: edgeStyle,
-        animated: edgeAnimated
+        animated: edgeAnimated,
       });
     }
   }

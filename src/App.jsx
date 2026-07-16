@@ -355,6 +355,7 @@ function App() {
         const cleanTreeRecursive = (node) => {
           if (!node) return null;
 
+          // 1. Kinder rekursiv verarbeiten
           let processedChildren = node.children 
             ? node.children.flatMap(child => {
                 const res = cleanTreeRecursive(child);
@@ -367,7 +368,6 @@ function App() {
             if (accepted) {
               // ANGENOMMEN:
               if (node.status === 'deleted') {
-                // Root-Knoten darf nicht gelöscht werden
                 if (node.id === 'root') {
                   return {
                     ...node,
@@ -395,7 +395,8 @@ function App() {
             } else {
               // ABGELEHNT:
               if (node.status === 'added') {
-                return null; // Neu hinzugefügter Vorschlag fliegt mitsamt seinen Kindern raus
+                if (node.id === 'root') return node; // Root-Schutz
+                return null; 
               }
               if (node.status === 'updated') {
                 return {
@@ -416,29 +417,19 @@ function App() {
             }
           }
 
-          // 3. Wenn nicht direkt betroffen, normalen Knoten mit verarbeiteten Kindern zurückgeben
+          // 3. Wenn nicht direkt betroffen
           return {
             ...node,
             children: processedChildren
           };
         };
 
-        const safeMapChildren = (rootNode) => {
-          if (!rootNode) return null;
-          return {
-            ...rootNode,
-            children: rootNode.children 
-              ? rootNode.children.flatMap(child => {
-                  const res = cleanTreeRecursive(child);
-                  return Array.isArray(res) ? res : (res ? [res] : []);
-                })
-              : []
-          };
-        };
+        // KORREKTUR: safeMapChildren komplett entfernen und den Root direkt verarbeiten!
+        const finalRoot = cleanTreeRecursive(map.rootNode);
 
         return {
           ...map,
-          rootNode: safeMapChildren(map.rootNode)
+          rootNode: finalRoot || map.rootNode
         };
       };
 
