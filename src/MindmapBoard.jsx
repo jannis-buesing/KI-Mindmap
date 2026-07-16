@@ -26,6 +26,7 @@ function EditableMindmapNode({ id, data, isConnectable, selected }) {
   const [value, setValue] = useState(data.label || '');
   const inputRef = useRef(null);
   const [isHovered, setIsHovered] = useState(false);
+  const [textAreaContentHeight, setTextAreaContentHeight] = useState(40);
 
   // EINE zentrale Definition der Breite als State
   const [currentWidth, setCurrentWidth] = useState(data.width || 210); 
@@ -86,19 +87,24 @@ function EditableMindmapNode({ id, data, isConnectable, selected }) {
   useEffect(() => {
     if (!nodeRef.current) return;
 
-    // Wir suchen das Text-Container-Element (entweder die Vorschau oder das Textarea)
-    const contentContainer = nodeRef.current.querySelector('.node-content-wrapper');
-    if (!contentContainer) return;
+    const textarea = nodeRef.current.querySelector('textarea');
+    const labelDiv = nodeRef.current.querySelector('.node-label');
 
-    // Ermittle die tatsächliche Höhe des Inhalts
-    const scrollHeight = contentContainer.scrollHeight;
-    
-    // Puffer für Padding (z.B. 10px oben, 10px unten = 20px) + Border
-    const totalRawHeight = scrollHeight + 20;
+    let textHeight = 20;
 
-    // Auf das nächste Vielfache von 15px aufrunden (Mindesthöhe 45px)
+    if (isEditing && textarea) {
+      textarea.style.height = 'auto';
+      textHeight = textarea.scrollHeight;
+      
+      textarea.style.height = `${textHeight}px`;
+    } else if (labelDiv) {
+      textHeight = labelDiv.offsetHeight;
+    }
+
+    const totalRawHeight = textHeight + 35;
+
     const gridSize = 15;
-    const snappedHeight = Math.max(Math.ceil(totalRawHeight / gridSize) * gridSize, 45);
+    const snappedHeight = Math.max(Math.ceil(totalRawHeight / gridSize) * gridSize, 60);
 
     setMeasuredHeight(snappedHeight);
   }, [data.label, value, isEditing, currentWidth]);
@@ -292,10 +298,10 @@ function EditableMindmapNode({ id, data, isConnectable, selected }) {
 
       {/* Neuer Wrapper mit eindeutiger Klasse zur Höhenmessung */}
       <div
-        className="node-content-wrapper" 
+        className="node-content-wrapper"
         style={{
           width: '100%', 
-          height: '100%', 
+          height: '100%',
           display: 'flex', 
           flexDirection: 'column', 
           alignItems: 'center', 
@@ -320,8 +326,6 @@ function EditableMindmapNode({ id, data, isConnectable, selected }) {
               padding: 0,
               margin: 0,
               width: '100%',
-              // Nutzt exakt dieselbe Höhe wie die Box (minus vertikales Padding)
-              height: '100%', 
               fontFamily: 'inherit',
               fontSize: 'inherit',
               fontWeight: 'inherit',
@@ -330,19 +334,18 @@ function EditableMindmapNode({ id, data, isConnectable, selected }) {
               resize: 'none',
               overflow: 'hidden',
               boxSizing: 'border-box',
-              
-              // Perfekte optische Synchronisation zur Vorschau:
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               whiteSpace: 'pre-wrap',
               wordBreak: 'break-word',
               lineHeight: '1.4',
+              alignContent: 'center'
             }}
             rows={1}
           />
         ) : (
-          <div className="node-label" style={{ 
+          <div className="node-label" style={{
             wordBreak: 'break-word', 
             whiteSpace: 'pre-wrap',
             textAlign: 'center',
