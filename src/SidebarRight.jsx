@@ -1,52 +1,123 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 
 export function SidebarRight({
   selectedNodeIds = [],
-  selectedNodes = [],
   onUpdateNodes,
 }) {
   const isOpen = selectedNodeIds.length > 0;
   const [isHovered, setIsHovered] = useState(false);
-  const firstNode = selectedNodes[0];
 
+  // Zustand, um die Details des ersten ausgewählten Knotens zu speichern
+  // Dies hilft, übermässige Re-Renders zu vermeiden, wenn sich nur die Referenz von selectedNodes ändert.
+  const [firstNodeData, setFirstNodeData] = useState(null);
+
+  // Ref für alle Knoten, um bei Bedarf auf aktuelle Daten zugreifen zu können
+  const allNodesRef = useRef(new Map());
+
+  // Abonnieren von Updates der React Flow Nodes, um die Sidebars aktuell zu halten
+  useEffect(() => {
+    const handleUpdateNodesData = (e) => {
+      const { nodeIds, field, value } = e.detail;
+      const updatedMap = new Map(allNodesRef.current);
+
+      nodeIds.forEach(id => {
+        const currentNode = updatedMap.get(id) || { id, data: {}, style: {} };
+        let newData = { ...currentNode.data };
+        let newStyle = { ...currentNode.style };
+
+        if (field === 'label') {
+          newData.label = value;
+        } else if (field === 'borderColor') {
+          newStyle.borderColor = value;
+        }
+        updatedMap.set(id, { ...currentNode, data: newData, style: newStyle });
+      });
+      allNodesRef.current = updatedMap;
+
+      // Wenn der erste ausgewählte Knoten aktualisiert wurde, aktualisiere firstNodeData
+      if (selectedNodeIds.length > 0 && nodeIds.includes(selectedNodeIds[0])) {
+        setFirstNodeData(updatedMap.get(selectedNodeIds[0]));
+      }
+    };
+
+    // Initial alle Nodes aus React Flow abfragen (falls bereits vorhanden)
+    const initialNodesEvent = new CustomEvent('reactflow-get-all-nodes');
+    window.dispatchEvent(initialNodesEvent);
+
+    const handleAllNodes = (e) => {
+      allNodesRef.current = new Map(e.detail.nodes.map(node => [node.id, node]));
+      if (selectedNodeIds.length > 0) {
+        setFirstNodeData(allNodesRef.current.get(selectedNodeIds[0]));
+      }
+    };
+
+    window.addEventListener('reactflow-nodes-data-update', handleUpdateNodesData);
+    window.addEventListener('reactflow-all-nodes-init', handleAllNodes);
+    
+    // Cleanup
+    return () => {
+      window.removeEventListener('reactflow-nodes-data-update', handleUpdateNodesData);
+      window.removeEventListener('reactflow-all-nodes-init', handleAllNodes);
+    };
+  }, [selectedNodeIds]);
+
+  // Wenn sich selectedNodeIds ändert, den firstNodeData aktualisieren
+  useEffect(() => {
+    if (selectedNodeIds.length > 0) {
+      setFirstNodeData(allNodesRef.current.get(selectedNodeIds[0]));
+    } else {
+      setFirstNodeData(null);
+    }
+  }, [selectedNodeIds]);
+
+  // Helferfunktion, um die Farbe eines Knotens zu bestimmen
   const getNodeColor = (node) => {
-  if (!node?.style) return "var(--default-node-border)";
-  
-  if (node.style.borderColor) return node.style.borderColor;
-  
-  if (node.style.border && node.style.border.includes("solid")) {
-    const parts = node.style.border.split("solid ");
-    if (parts[1]) return parts[1].trim();
-  }
-  
-  return "var(--default-node-border)";
-};
+    if (!node?.style) return "var(--default-node-border)";
+    if (node.style.borderColor) return node.style.borderColor;
+    // Fallback, falls border-color nicht explizit gesetzt ist, aber ein border vorhanden ist
+    if (node.style.border && typeof node.style.border === 'string' && node.style.border.includes("solid")) {
+      const parts = node.style.border.split("solid ");
+      if (parts[1]) return parts[1].trim();
+    }
+    return "var(--default-node-border)";
+  };
+
+  // Aktuelle Daten für den ersten Knoten
+  const firstNode = firstNodeData;
 
   // Color ////////////////////
-  const realNodeColor = getNodeColor(firstNode);
+  const realNodeColor = firstNode ? getNodeColor(firstNode) : "var(--default-node-border)";
 
   const [currentColor, setCurrentColor] = useState("");
 
-  const allShareSameColor = selectedNodes.every(
-    (n) => getNodeColor(n) === realNodeColor
-  );
+  const allShareSameColor = useMemo(() => {
+    if (selectedNodeIds.length === 0) return true;
+    const firstColor = firstNode ? getNodeColor(firstNode) : "var(--default-node-border)";
+    return selectedNodeIds.every(id => {
+      const node = allNodesRef.current.get(id);
+      return getNodeColor(node) === firstColor;
+    });
+  }, [selectedNodeIds, firstNodeData]);
 
   useEffect(() => {
-    if (!isOpen || selectedNodes.length === 0) {
+    if (!isOpen || selectedNodeIds.length === 0) {
       setCurrentColor("");
       return;
     }
-    
-    const nodeColor = getNodeColor(firstNode);
-    setCurrentColor(allShareSameColor ? nodeColor : "");
-  }, [selectedNodeIds, allShareSameColor, firstNode, isOpen]);
+    setCurrentColor(allShareSameColor ? realNodeColor : "");
+  }, [selectedNodeIds, allShareSameColor, realNodeColor, isOpen]);
 
  // Label //////////////////////
   const [localLabel, setLocalLabel] = useState("");
 
-  const allShareSameLabel = selectedNodes.every(
-      (n) => n.data?.label === firstNode?.data?.label,
-    );
+  const allShareSameLabel = useMemo(() => {
+    if (selectedNodeIds.length === 0) return true;
+    const firstLabel = firstNode?.data?.label || "";
+    return selectedNodeIds.every(id => {
+      const node = allNodesRef.current.get(id);
+      return (node?.data?.label || "") === firstLabel;
+    });
+  }, [selectedNodeIds, firstNodeData]);
 
   useEffect(() => {
     setLocalLabel(allShareSameLabel ? firstNode?.data?.label || "" : "");
@@ -156,7 +227,7 @@ export function SidebarRight({
               setLocalLabel(e.target.value);
               if (selectedNodeIds.length === 1) {
                 const liveEvent = new CustomEvent("reactflow-live-label", {
-                  detail: { nodeId: selectedNodeIds[0], value: e.target.value },
+                  detail: { nodeIds: [selectedNodeIds[0]], field: "label", value: e.target.value },
                 });
                 window.dispatchEvent(liveEvent);
               }

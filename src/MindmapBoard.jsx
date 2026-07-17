@@ -562,14 +562,22 @@ export function MindmapBoardContent({ rawData, currentFileName, positions, onDel
    }, [getNodes, setMindmapData]);
 
   const onSelectionChangeCustom = useCallback(({ nodes: selected }) => {
-    // Nur updaten, wenn sich die IDs wirklich geändert haben, um unnötige App-Rerenders zu vermeiden
-    const newIds = selected.map(n => n.id).sort().join(',');
-    const oldIds = selectedNodeIdsRef.current.map(id => id).sort().join(',');
+    // Wir geben nur die IDs weiter, um unnötige Re-Renders von App.jsx zu vermeiden
+    const newIds = selected.map(n => n.id);
+    const oldIds = selectedNodeIdsRef.current;
+
+    // Performanterer Vergleich von Array-Inhalten
+    const hasChanged = newIds.length !== oldIds.length || newIds.some((id, index) => id !== oldIds[index]);
     
-    if (newIds !== oldIds) {
-      onNodesSelect(selected);
+    if (hasChanged) {
+      onNodesSelect(newIds); // Gibt jetzt ein Array von IDs weiter
     }
-  }, [onNodesSelect]);
+
+    // Sende alle aktuellen Nodes an die SidebarRight, damit diese ihre internen Daten aktualisieren kann
+    window.dispatchEvent(new CustomEvent('reactflow-all-nodes-init', {
+      detail: { nodes: getNodes() }
+    }));
+  }, [onNodesSelect, getNodes]);
 
   // =========== WIRD ERSETZT? ============
   // const dragStartRef = useRef(null);
@@ -712,30 +720,50 @@ const handleNodeResize = useCallback((e) => {
     }));
   };
 
+  // Neuer Effect zum Aktualisieren der React Flow Nodes basierend auf globalen Events von App.jsx
   useEffect(() => {
-    const handleLiveUpdate = (e) => {
-      const { nodeId, value } = e.detail;
-      
-      // Wir updaten die flachen React-Flow-Nodes DIREKT im UI-State,
-      // ohne dass die Haupt-App (App.jsx) davon weiß oder neu rendert.
-      setNodes((currentNodes) =>
-        currentNodes.map((node) => {
-          if (node.id === nodeId) {
-            return {
-              ...node,
-              data: { ...node.data, label: value }
-            };
+    const handleUpdateNodesData = (e) => {
+      const { nodeIds, field, value } = e.detail;
+
+      setNodes((nds) =>
+        nds.map((node) => {
+          if (nodeIds.includes(node.id)) {
+            if (field === 'label') {
+              return { ...node, data: { ...node.data, label: value } };
+            }
+            if (field === 'borderColor') {
+              return { ...node, style: { ...node.style, borderColor: value } };
+            }
           }
           return node;
         })
       );
+      // Sende ein Update an SidebarRight, damit diese ihre internen Daten aktualisieren kann
+      window.dispatchEvent(new CustomEvent('reactflow-nodes-data-update', { 
+        detail: { nodeIds, field, value } 
+      }));
     };
 
-    window.addEventListener('reactflow-live-label', handleLiveUpdate);
-    return () => window.removeEventListener('reactflow-live-label', handleLiveUpdate);
+    window.addEventListener('reactflow-update-nodes-data', handleUpdateNodesData);
+    window.addEventListener('reactflow-live-label', handleUpdateNodesData); // Auch das Live-Label nutzt diesen neuen Handler
+    return () => {
+      window.removeEventListener('reactflow-update-nodes-data', handleUpdateNodesData);
+      window.removeEventListener('reactflow-live-label', handleUpdateNodesData);
+    };
   }, [setNodes]);
-  
+
   const proOptions = { hideAttribution: true };
+
+  // Event-Listener für React Flow Nodes Daten in SidebarRight
+  useEffect(() => {
+    const handleGetAllNodes = () => {
+      window.dispatchEvent(new CustomEvent('reactflow-all-nodes-init', {
+        detail: { nodes: getNodes() }
+      }));
+    };
+    window.addEventListener('reactflow-get-all-nodes', handleGetAllNodes);
+    return () => window.removeEventListener('reactflow-get-all-nodes', handleGetAllNodes);
+  }, [getNodes]);
 
   return (
       <div
@@ -803,7 +831,7 @@ const handleNodeResize = useCallback((e) => {
           selectionKeyCode={null}
           selectionMode='partial'
           translateExtent={[[-10000, -10000], [10000, 10000]]}
-          nodeExtent={[[-10000, -10000], [1000, 10000]]}
+          nodeExtent={[[-10000, -10000], [10000, 10000]]}
         >
           <Background color="var(--text)" gap={15} size={1.5} />
 
