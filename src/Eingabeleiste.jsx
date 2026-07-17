@@ -1,60 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { SendHorizontal, Paperclip } from 'lucide-react';
 
-export function Eingabeleiste({
-  userInput,
-  setUserInput,
-  loading,
-  expandMindmap,
-  selectedNodeIds,
-  mindmapData
-}) {
-  const [eingabeleisteIsExpanded, setEingabeleisteIsExpanded] = useState(false);
-  const inputRef = useRef(null);
-  const textareaRef = useRef(null);
-  const spanRef = useRef(null);
-
-  // 1. Fokus & Cursor-Position beim Wechsel steuern
-  useEffect(() => {
-    if (eingabeleisteIsExpanded) {
-      const textarea = textareaRef.current;
-      if (textarea) {
-        textarea.focus();
-        const len = textarea.value.length;
-        textarea.setSelectionRange(len, len);
-      }
-    } else {
-      const input = inputRef.current;
-      if (input) {
-        input.focus();
-        const len = input.value.length;
-        input.setSelectionRange(len, len);
-      }
-    }
-  }, [eingabeleisteIsExpanded]);
-
-  // 2. Performance-optimierte Messung ohne Layout-Thrashing
-  useEffect(() => {
-    if (!eingabeleisteIsExpanded && userInput) {
-      const animationFrame = requestAnimationFrame(() => {
-        const input = inputRef.current;
-        const span = spanRef.current;
-        if (input && span) {
-          const inputWidth = input.offsetWidth;
-          const textWidth = span.offsetWidth;
-          
-          if (inputWidth > 0 && textWidth > inputWidth - 25) {
-            setEingabeleisteIsExpanded(true);
-          }
-        }
-      });
-      return () => cancelAnimationFrame(animationFrame);
-    }
-  }, [userInput, eingabeleisteIsExpanded]);
-
 // Node Indicator Badge Start
-  const NodeIndicatorBadge = () => {
-    const count = selectedNodeIds.length;
+  export const NodeIndicatorBadge = ({ count }) => {
     if (count === 0) return null;
 
     // 1. Dynamischer Titel für grammatikalische Korrektheiten
@@ -114,7 +62,71 @@ export function Eingabeleiste({
 };
 // Node Indicator Badge Ende
 
+export function Eingabeleiste({
+  loading,
+  expandMindmap,
+  selectedNodeIds,
+  mindmapData
+}) {
+  const [eingabeleisteIsExpanded, setEingabeleisteIsExpanded] = useState(false);
+  const [userInput, setUserInput] = useState('');
+  const inputRef = useRef(null);
+  const textareaRef = useRef(null);
+  const spanRef = useRef(null);
+
+  const handleSubmit = (e) => {
+    if (e) e.preventDefault();
+    if (!userInput.trim() || loading) return;
+
+    const fallbackText = userInput; // Text sichern
+    setUserInput('');               // Feld leeren
+
+    expandMindmap(userInput, () => {
+      setUserInput(fallbackText);
+    });
+  };
+
+  // 1. Fokus & Cursor-Position beim Wechsel steuern
+  useEffect(() => {
+    if (eingabeleisteIsExpanded) {
+      const textarea = textareaRef.current;
+      if (textarea) {
+        textarea.focus();
+        const len = textarea.value.length;
+        textarea.setSelectionRange(len, len);
+      }
+    } else {
+      const input = inputRef.current;
+      if (input) {
+        input.focus();
+        const len = input.value.length;
+        input.setSelectionRange(len, len);
+      }
+    }
+  }, [eingabeleisteIsExpanded]);
+
+  // 2. Performance-optimierte Messung ohne Layout-Thrashing
+  useEffect(() => {
+    if (!eingabeleisteIsExpanded && userInput) {
+      const animationFrame = requestAnimationFrame(() => {
+        const input = inputRef.current;
+        const span = spanRef.current;
+        if (input && span) {
+          const inputWidth = input.offsetWidth;
+          const textWidth = span.offsetWidth;
+          
+          if (inputWidth > 0 && textWidth > inputWidth - 25) {
+            setEingabeleisteIsExpanded(true);
+          }
+        }
+      });
+      return () => cancelAnimationFrame(animationFrame);
+    }
+  }, [userInput, eingabeleisteIsExpanded]);
+
   if (!mindmapData?.name) return null;
+
+  const count = selectedNodeIds.length;
 
 // =============================================================== RETURN ==============================================================================
   return (
@@ -167,7 +179,7 @@ export function Eingabeleiste({
             disabled={loading}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && userInput.trim().length > 0 && !loading) {
-                expandMindmap();
+                handleSubmit();
               }
             }}
             style={{
@@ -183,10 +195,10 @@ export function Eingabeleiste({
           />
           
           {/* Badge links neben dem Senden-Button */}
-          <NodeIndicatorBadge />
+          <NodeIndicatorBadge count={count} />
 
           <button
-            onClick={expandMindmap}
+            onClick={handleSubmit}
             disabled={loading || userInput.trim().length === 0}
             style={{
               padding: '10px 12px',
@@ -259,7 +271,7 @@ export function Eingabeleiste({
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
                   if (userInput.trim().length > 0 && !loading) {
-                    expandMindmap();
+                    handleSubmit();
                     setEingabeleisteIsExpanded(false);
                   }
                 }
@@ -313,7 +325,7 @@ export function Eingabeleiste({
               
               <button
                 onClick={() => {
-                  expandMindmap();
+                  handleSubmit();
                   setEingabeleisteIsExpanded(false);
                 }}
                 disabled={loading || userInput.trim().length === 0}

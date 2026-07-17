@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { Analytics } from "@vercel/analytics/react";
 import { MindmapBoard } from './MindmapBoard';
@@ -14,17 +14,20 @@ import {
 } from './utils/fileSystem';
 
 function App() {
+  console.log("App Component Render");
   const [dirHandle, setDirHandle] = useState(null);
   const [hasPermission, setHasPermission] = useState(false);
   const [mapsList, setMapsList] = useState([]);
   const [mindmapData, setMindmapData] = useState(null);
-  const [userInput, setUserInput] = useState('');
+  // const [userInput, setUserInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [isSaved, setIsSaved] = useState(true);
   const isInitialLoad = useRef(true);
   const isRenamingRef = useRef(false);
   const [selectedNodes, setSelectedNodes] = useState([]); 
-  const selectedNodeIds = selectedNodes.map(n => n.id);
+  const selectedNodeIds = useMemo(() => {
+    return selectedNodes.map(n => n.id);
+  }, [selectedNodes]);
   const [userApiKey, setUserApiKey] = useState(() => {
     const savedKey = localStorage.getItem('gemini_user_api_key');
     return savedKey || '';
@@ -38,7 +41,8 @@ function App() {
   const [isDark, setIsDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches);
 
   useEffect(() => {
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    console.log("App Effect [prefers-color-scheme]");
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
     const handleChange = (e) => setIsDark(e.matches);
     
     mediaQuery.addEventListener('change', handleChange);
@@ -46,10 +50,12 @@ function App() {
   }, []);
 
   useEffect(() => {
+    console.log('App Effect [userPickedAccentColor]');
     localStorage.setItem('user_picked_accent_colors', JSON.stringify(userPickedAccentColor));
   }, [userPickedAccentColor]);
 
   useEffect(() => {
+    console.log('App Effect [userPickedAccentColor, isDark]');
     const currentMode = isDark ? 'dark' : 'light';
     const activeColor = userPickedAccentColor[currentMode];
 
@@ -79,11 +85,13 @@ function App() {
 
   // User API-Key im Local Storage speichern
   useEffect(() => {
+    console.log('App Effect [userApiKey]');
     localStorage.setItem('gemini_user_api_key', userApiKey);
   }, [userApiKey]);
 
   // 1. Beim Starten nachsehen, ob ein Ordner in IndexedDB schlummert
   useEffect(() => {
+    console.log('App Effect [initSavedDirectory]');
     async function initSavedDirectory() {
       const savedHandle = await getStoredDirectoryHandle();
       if (savedHandle) {
@@ -136,7 +144,7 @@ function App() {
       _currentFileName: '', 
       lastChanged: Date.now(),
       date: Date.now(),
-      rootNode: { id: "root", label: defaultName, children: [] },
+      rootNode: { id: 'root', label: defaultName, children: [] },
       positions: {} 
     };
 
@@ -171,6 +179,7 @@ function App() {
 
   // 5. Auto-Save-Effekt
   useEffect(() => {
+    console.log('App Effect [mindmapData, dirHandle, hasPermission] (Auto-Save)');
     if (!dirHandle || !hasPermission || !mindmapData?.id) return;
 
     if(isInitialLoad.current){
@@ -184,22 +193,28 @@ function App() {
     
     setIsSaved(false);
     const delayDebounce = setTimeout(async () => {
+      console.log('Saving Mindmap Data...');
       await saveMindmapToFile(dirHandle, mindmapData.name, mindmapData, false);
       setIsSaved(true);
 
-      const files = await loadMindmapsFromDirectory(dirHandle);
-      setMapsList(files);
+      // const files = await loadMindmapsFromDirectory(dirHandle);
+      // setMapsList(files);
     }, 500);
 
     return () => clearTimeout(delayDebounce);
   }, [mindmapData, dirHandle, hasPermission]);
+
+  const mindmapDataRef = useRef(mindmapData);
+  useEffect(() => {
+    mindmapDataRef.current = mindmapData;
+  }, [mindmapData]);
 
   // 6. Löschen
   async function handleDeleteMap(id) {
     const foundMap = mapsList.find(m => m.id === id);
     if (!foundMap) return;
 
-    if (confirm(`Möchtest du "${foundMap.name}" wirklich löschen?`)) {
+    if (confirm(`Möchtest du '${foundMap.name}' wirklich löschen?`)) {
       await deleteMindmapFile(dirHandle, foundMap.name);
       const files = await loadMindmapsFromDirectory(dirHandle);
       setMapsList(files);
@@ -250,17 +265,15 @@ function App() {
   }
 
   // 8. KI Generierung
-  async function expandMindmap() {
+  async function expandMindmap(userInput, onFailure) {
     if (!mindmapData?.name) {
       alert("Bitte wähle oder erstelle zuerst eine Mindmap in der linken Leiste!");
       return;
     }
 
-    const targetMapId = mindmapData.id; 
-    const currentPromptText = userInput;
+    const targetMapId = mindmapData.id;
 
     setLoading(true);
-    setUserInput('');
 
     try {
       // Ruf unsere neue Vercel Serverless Function auf
@@ -272,7 +285,7 @@ function App() {
         body: JSON.stringify({
           rootNode: mindmapData.rootNode,
           selectedNodeIds: selectedNodeIds,
-          userInput: currentPromptText,
+          userInput: userInput,
           userApiKey: userApiKey.trim()
         })
       });
@@ -341,11 +354,12 @@ function App() {
     } catch (error) {
       console.error("Fehler beim Erweitern der Mindmap:", error);
       alert(`Fehler: ${error.message}`);
-      setUserInput(userInput);
+      if (onFailure){
+        onFailure();
+      }
       setLoading(false);
     }
   }
-
 
   useEffect(() => {
     const processDecisions = (nodeIdsArray, accepted) => {
@@ -456,37 +470,78 @@ function App() {
     };
   }, []);
 
+  const eventHandlersRef = useRef({});
+
+  eventHandlersRef.current = {
+  handleLiveLabel: (e) => {
+    const { nodeId, value } = e.detail;
+    handleUpdateSelectedNodes('label', value, nodeId);
+  },
+  handleNodeDelete: (e) => {
+    const { nodeIds } = e.detail;
+    handleDeleteNodes(nodeIds);
+  },
+  handleNodeCreate: (e) => {
+    const { position, parentId } = e.detail;
+    handleCreateNode(position, parentId);
+  },
+  handleNodeInitialized: (e) => {
+    const { nodeId } = e.detail;
+    
+    setMindmapData((prev) => {
+      if (!prev) return prev;
+
+      const disableIsNewRecursive = (node) => {
+        if (!node) return null;
+        let updatedNode = { ...node };
+        
+        if (node.id === nodeId) {
+          updatedNode.isNewInstantEditing = false;
+        }
+        
+        if (node.children) {
+          updatedNode.children = node.children.map(disableIsNewRecursive);
+        }
+        return updatedNode;
+      };
+
+      return {
+        ...prev,
+        rootNode: disableIsNewRecursive(prev.rootNode),
+        floatingNodes: prev.floatingNodes 
+          ? prev.floatingNodes.map(disableIsNewRecursive) 
+          : []
+      };
+    });
+  }
+};
+
   useEffect(() => {
-    const handleLiveLabel = (e) => {
-      const { nodeId, value } = e.detail;
-      handleUpdateSelectedNodes('label', value, nodeId);
-    };
+    const trigger = (name) => (e) => eventHandlersRef.current[name]?.(e);
 
-    const handleNodeDelete = (e) => {
-      const { nodeIds } = e.detail;
-      handleDeleteNodes(nodeIds);
-    };
-
-    const handleNodeCreate = (e) => {
-      const { position, parentId } = e.detail;
-      handleCreateNode(position, parentId);
-    };
-
-    window.addEventListener('reactflow-live-label', handleLiveLabel);
-    window.addEventListener('reactflow-nodes-delete', handleNodeDelete);
-    window.addEventListener('reactflow-node-create', handleNodeCreate);
+    const onLiveLabel = trigger('handleLiveLabel');
+    const onNodeDelete = trigger('handleNodeDelete');
+    const onNodeCreate = trigger('handleNodeCreate');
+    const onNodeInit = trigger('handleNodeInitialized');
+    
+    window.addEventListener('reactflow-live-label', onLiveLabel);
+    window.addEventListener('reactflow-nodes-delete', onNodeDelete);
+    window.addEventListener('reactflow-node-create', onNodeCreate);
+    window.addEventListener('reactflow-node-initialized', onNodeInit);
     return () => {
-      window.removeEventListener('reactflow-live-label', handleLiveLabel);
-      window.removeEventListener('reactflow-nodes-delete', handleNodeDelete);
-      window.removeEventListener('reactflow-node-create', handleNodeCreate);
+      window.removeEventListener('reactflow-live-label', onLiveLabel);
+      window.removeEventListener('reactflow-nodes-delete', onNodeDelete);
+      window.removeEventListener('reactflow-node-create', onNodeCreate);
+      window.removeEventListener('reactflow-node-initialized', onNodeInit);
     };
   }, []);
 
-  const handleCreateNode = (position, parentId) => {
+  const handleCreateNode = useCallback((position, parentId) => {
     const newNodeId = `node_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
     const newNode = {
       id: newNodeId,
       label: 'Neuer Knoten',
+      isNewInstantEditing: 'true',
       children: []
     };
 
@@ -541,9 +596,9 @@ function App() {
     setTimeout(() => {
       window.dispatchEvent(new CustomEvent('reactflow-node-created', { detail: { nodeId: newNodeId } }));
     }, 50);
-  };
+  }, []);
 
-const handleDeleteNodes = (nodeIds) => {
+  const handleDeleteNodes = useCallback((nodeIds) => {
     if (!nodeIds || nodeIds.length === 0) return;
     
     const filteredIds = nodeIds.filter(id => id !== 'root');
@@ -607,9 +662,9 @@ const handleDeleteNodes = (nodeIds) => {
         floatingNodes: newFloatingNodes
       };
     });
-  };
+  }, []);
 
-  const handleUpdateSelectedNodes = (field, value, targetNodeId = null) => {
+  const handleUpdateSelectedNodes = useCallback((field, value, targetNodeId = null) => {
     console.log("Updating nodes: ", field, value, targetNodeId || selectedNodeIds);
     
     setSelectedNodes(current => current.map(node => {
@@ -651,7 +706,7 @@ const handleDeleteNodes = (nodeIds) => {
           : []
       };
     });
-  };
+  }, []);
 
   function keinContextMenu(){
     event.preventDefault();
@@ -699,6 +754,7 @@ const handleDeleteNodes = (nodeIds) => {
             rawData={mindmapData}
             currentFileName={mindmapData?.name}
             positions={mindmapData.positions} 
+            onDeleteNodes={handleDeleteNodes} 
             setMindmapData={setMindmapData}
             onNodesSelect={setSelectedNodes}
             selectedNodeIds={selectedNodeIds}
@@ -714,9 +770,9 @@ const handleDeleteNodes = (nodeIds) => {
         )}
 
       {/* Eingabeleiste Komponente Start */}
-        <Eingabeleiste 
-          userInput={userInput}
-          setUserInput={setUserInput}
+        <Eingabeleiste
+          // userInput={userInput}
+          // setUserInput={setUserInput}
           loading={loading}
           expandMindmap={expandMindmap}
           selectedNodeIds={selectedNodeIds}

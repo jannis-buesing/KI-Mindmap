@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo, memo, useCallback } from 'react';
 import { 
   ReactFlow, 
   Background, 
@@ -16,12 +16,8 @@ import '@xyflow/react/dist/style.css';
 import { getLayoutedElements } from './utils/layout';
 import { Check, X } from 'lucide-react';
 
-const nodeTypes = {
-  default: EditableMindmapNode,
-  proposalNode: EditableMindmapNode
-};
-
-function EditableMindmapNode({ id, data, isConnectable, selected }) {
+function EditableMindmapNodeComponent({ id, data, isConnectable, selected }) {
+  console.log(`EditableMindmapNodeComponent Render: ${id}, Selected: ${selected}, Label: ${data.label}`);
   const [isEditing, setIsEditing] = useState(false);
   const [value, setValue] = useState(data.label || '');
   const inputRef = useRef(null);
@@ -34,15 +30,29 @@ function EditableMindmapNode({ id, data, isConnectable, selected }) {
   const [measuredHeight, setMeasuredHeight] = useState(45);
 
   useEffect(() => {
+    console.log(`EditableMindmapNodeComponent Effect [data.label]: ${id}, Label: ${data.label}`);
     setValue(data.label || '');
   }, [data.label]);
 
   useEffect(() => {
+    console.log(`EditableMindmapNodeComponent Effect [isEditing]: ${id}, isEditing: ${isEditing}`);
     if (isEditing && inputRef.current) {
       inputRef.current.focus();
       inputRef.current.select();
     }
   }, [isEditing]);
+
+  useEffect(() => {
+    console.log(`EditableMindmapNodeComponent Effect [data.isNewInstantEditing]: ${id}, isNewInstantEditing: ${data.isNewInstantEditing}`);
+    if (data.isNewInstantEditing) {
+      setIsEditing(true);
+      console.log("setIsEditing(true)");
+
+      window.dispatchEvent(new CustomEvent('reactflow-node-initialized', {
+        detail: { nodeId: id }
+      }));
+    }
+  }, [data.isNewInstantEditing, id]);
 
   const handleDoubleClick = (e) => {
     e.stopPropagation();
@@ -52,9 +62,9 @@ function EditableMindmapNode({ id, data, isConnectable, selected }) {
   const saveChange = () => {
     setIsEditing(false);
     if (value.trim() !== '' && value !== data.label) {
-      if (data.onLabelChange) {
-        data.onLabelChange(id, value);
-      }
+      window.dispatchEvent(new CustomEvent('reactflow-live-label', {
+        detail: { nodeId: id, value: value }
+      }));
     } else {
       setValue(data.label || '');
     }
@@ -85,6 +95,7 @@ function EditableMindmapNode({ id, data, isConnectable, selected }) {
 
   // Dynamische Höhenberechnung basierend auf dem realen Inhalt
   useEffect(() => {
+    console.log(`EditableMindmapNodeComponent Effect [height calculation]: ${id}, Label: ${data.label}, Value: ${value}, isEditing: ${isEditing}, Width: ${currentWidth}`);
     if (!nodeRef.current) return;
 
     const textarea = nodeRef.current.querySelector('textarea');
@@ -93,7 +104,7 @@ function EditableMindmapNode({ id, data, isConnectable, selected }) {
     let textHeight = 20;
 
     if (isEditing && textarea) {
-      textarea.style.height = 'auto';
+      textarea.style.height = "auto";
       textHeight = textarea.scrollHeight;
       
       textarea.style.height = `${textHeight}px`;
@@ -101,7 +112,7 @@ function EditableMindmapNode({ id, data, isConnectable, selected }) {
       textHeight = labelDiv.offsetHeight;
     }
 
-    const totalRawHeight = textHeight + 35;
+    const totalRawHeight = textHeight + 24;
 
     const gridSize = 15;
     const snappedHeight = Math.max(Math.ceil(totalRawHeight / gridSize) * gridSize, 60);
@@ -137,10 +148,10 @@ function EditableMindmapNode({ id, data, isConnectable, selected }) {
     return { min: snapMin, max: snapMax };
   };
 
-  const resizeRef = useRef({ startX: 0, startWidth: 0, min: 150, max: 600, finalWidth: 200 });
+  const resizeRef = useRef({ startX: 0, startWidth: 0, min: 150, max: 600, finalWidth: 200, lastDispatchedWidth: 0 });
 
   const doResize = (moveEvent) => {
-    const { startX, startWidth, min, max } = resizeRef.current;
+    const { startX, startWidth, min, max, lastDispatchedWidth } = resizeRef.current;
     const deltaX = moveEvent.clientX - startX;
     const rawWidth = startWidth + deltaX;
     
@@ -150,9 +161,14 @@ function EditableMindmapNode({ id, data, isConnectable, selected }) {
     
     resizeRef.current.finalWidth = finalWidth;
 
-    window.dispatchEvent(new CustomEvent('nodeResize', { 
-      detail: { nodeId: id, width: finalWidth, isDragging: true } 
-    }));
+    if (finalWidth !== lastDispatchedWidth) {
+      resizeRef.current.finalWidth = finalWidth;
+      resizeRef.current.lastDispatchedWidth = finalWidth; // Sofort aktualisieren!
+
+      window.dispatchEvent(new CustomEvent('nodeResize', { 
+        detail: { nodeId: id, width: finalWidth, isDragging: true } 
+      }));
+    }
   };
 
   const stopResizing = () => {
@@ -177,7 +193,8 @@ function EditableMindmapNode({ id, data, isConnectable, selected }) {
       startWidth: currentWidth,
       min,
       max,
-      finalWidth: currentWidth
+      finalWidth: currentWidth,
+      lastDispatchedWidth: currentWidth
     };
 
     window.addEventListener('mousemove', doResize);
@@ -201,10 +218,18 @@ function EditableMindmapNode({ id, data, isConnectable, selected }) {
     : (data.borderColor || 'var(--default-node-border)');
   const backgroundColor = data.backgroundColor || 'transparent';
 
+  // ================================================= RETURN ==============================================
+  const containerClasses = [
+    'editable-mindmap-node',
+    isRootNode ? 'node-root' : 'node-default',
+    selected ? 'node-selected' : ''
+  ].filter(Boolean).join(' ');
+
   return (
     <div 
       ref={nodeRef}
       tabIndex={0}
+      className={containerClasses}
       onDoubleClick={handleDoubleClick}
       onKeyDown={(e) => {
         if(e.key === 'F2'){
@@ -214,74 +239,24 @@ function EditableMindmapNode({ id, data, isConnectable, selected }) {
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       style={{
-        position: 'relative',
         width: `${currentWidth}px`,
-        height: `${measuredHeight}px`, // Nutzt die genormte Inhaltshöhe
-        display: 'flex', 
-        flexDirection: 'column', 
-        alignItems: 'center', 
-        justifyContent: 'center',
-        padding: '10px 15px', 
-        boxSizing: 'border-box', // Zurück zu border-box, da padding & border nun in die Höhenberechnung einfließen!
+        height: `${measuredHeight}px`,
         background: backgroundColor,
-        color: 'var(--text-h)',
         border: `2px solid ${borderColor}`,
-        borderRadius: '8px',
-        fontWeight: isRootNode ? '1200' : 'normal',
-        fontSize: isRootNode ? '18px' : '14px',
-        boxShadow: selected ? '0 0 0 2px var(--accent)' : 'none',
         cursor: isEditing ? 'text' : 'grab',
-        transition: 'border-color 0.1s ease, box-shadow 0.3s ease, height 0.15s ease-out',
       }}
     >
       {isProposal && (
-        <div style={{
-          position: 'absolute', top: '-45px', left: '50%', transform: 'translateX(-50%)',
-          background: 'none', border: 'none',
-          padding: '4px', display: 'flex', gap: '6px', fontSize: '12px',
-          zIndex: 9999
-        }}>
+        <div className="proposal-buttons-container">
           <button
             onClick={(e) => { e.stopPropagation(); handleDecision(true); }}
-            style={{ 
-              border: '1px solid var(--accent)', 
-              background: 'var(--default-node-border)',
-              boxShadow: '0 8px 10px rgba(0,0,0,0.15)',
-              cursor: 'pointer',
-              fontSize: '14px',
-              padding: '6px',
-              borderRadius: '6px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              transition: 'all 0.2s ease',
-              width: '32px',
-              height: '32px',
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgb(110, 185, 139)'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--default-node-border)'; }}
+            className="proposal-button accept"
           >
             <Check size={15} strokeWidth={2.5}/>
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); handleDecision(false); }}
-            style={{ 
-              border: '1px solid var(--accent)', 
-              background: 'var(--default-node-border)',
-              boxShadow: '0 8px 10px rgba(0,0,0,0.15)',
-              cursor: 'pointer',
-              fontSize: '14px',
-              padding: '6px',
-              borderRadius: '6px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              transition: 'all 0.2s ease',
-              width: '32px',
-              height: '32px'
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgb(163, 82, 82)'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--default-node-border)'; }}
+            className="proposal-button decline"
           >
             <X size={15} strokeWidth={2.5}/>
           </button>
@@ -297,16 +272,7 @@ function EditableMindmapNode({ id, data, isConnectable, selected }) {
       />
 
       {/* Neuer Wrapper mit eindeutiger Klasse zur Höhenmessung */}
-      <div
-        className="node-content-wrapper"
-        style={{
-          width: '100%', 
-          height: '100%',
-          display: 'flex', 
-          flexDirection: 'column', 
-          alignItems: 'center', 
-          justifyContent: 'center'
-        }}>
+      <div className="node-content-wrapper">
         {data.status === 'updated' && data.oldLabel && (
           <div style={{ fontSize: '10px', textDecoration: 'line-through', opacity: 0.5, marginBottom: '2px' }}>
             {data.oldLabel}
@@ -315,46 +281,15 @@ function EditableMindmapNode({ id, data, isConnectable, selected }) {
         {isEditing ? (
           <textarea
             ref={inputRef}
+            className='nodrag node-textarea'
             value={value}
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={handleKeyDown}
             onBlur={handleBlur}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              outline: 'none',
-              padding: 0,
-              margin: 0,
-              width: '100%',
-              fontFamily: 'inherit',
-              fontSize: 'inherit',
-              fontWeight: 'inherit',
-              color: 'inherit',
-              textAlign: 'center',
-              resize: 'none',
-              overflow: 'hidden',
-              boxSizing: 'border-box',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word',
-              lineHeight: '1.4',
-              alignContent: 'center'
-            }}
             rows={1}
           />
         ) : (
-          <div className="node-label" style={{
-            wordBreak: 'break-word', 
-            whiteSpace: 'pre-wrap',
-            textAlign: 'center',
-            fontWeight: isProposal ? '600' : 'normal',
-            textDecoration: data.status === 'deleted' ? 'line-through' : 'none',
-            opacity: data.status === 'deleted' ? 0.8 : 1,
-            lineHeight: '1.4',
-            width: '100%'
-          }}>
+          <div className={`node-label ${isProposal ? 'node-is-proposal' : ''} ${data.status === 'deleted' ? 'node-deleted-label' : ''}`}>
             {data.label}
           </div>
         )}
@@ -363,16 +298,7 @@ function EditableMindmapNode({ id, data, isConnectable, selected }) {
       <div 
         ref={resizeHandleRef}
         onMouseDown={startResizing}
-        className="nodrag"
-        style={{
-          position: 'absolute',
-          right: '-5px', 
-          top: 0,
-          height: '100%',
-          width: '10px',
-          cursor: 'ew-resize',
-          zIndex: 999,
-        }}
+        className="nodrag node-resize-handle"
       />
       
       <Handle 
@@ -384,6 +310,31 @@ function EditableMindmapNode({ id, data, isConnectable, selected }) {
     </div>
   );
 }
+
+export const EditableMindmapNode = React.memo(EditableMindmapNodeComponent, (prevProps, nextProps) => {
+  // Optimierte Vergleichslogik: 
+  // 1. Primitive Props zuerst (selected, isConnectable)
+  if (prevProps.selected !== nextProps.selected) return false;
+  if (prevProps.isConnectable !== nextProps.isConnectable) return false;
+
+  // 2. Data-Objekt Inhalte vergleichen (Shallow Check der relevanten Keys)
+  const p = prevProps.data;
+  const n = nextProps.data;
+
+  return (
+    p.label === n.label &&
+    p.width === n.width &&
+    p.status === n.status &&
+    p.borderColor === n.borderColor &&
+    p.backgroundColor === n.backgroundColor &&
+    p.isNewInstantEditing === n.isNewInstantEditing &&
+    p.isRootNode === n.isRootNode &&
+    p.oldLabel === n.oldLabel
+  );
+});
+
+// Wichtig für React Flow DevTools
+EditableMindmapNode.displayName = 'EditableMindmapNode';
 
 // Diese Funktion verwandelt das verschachtelte KI-JSON rekursiv in flache React-Flow-Daten
 function convertTreeToFlow(node, parentId = null, elements = { nodes: [], edges: [] }) {
@@ -415,7 +366,7 @@ function convertTreeToFlow(node, parentId = null, elements = { nodes: [], edges:
       borderColor = '#22c55e';
       backgroundColor = 'rgba(34, 197, 94, 0.15)';
       edgeStyle = { stroke: '#22c55e', strokeWidth: 2 };
-      edgeAnimated = true;
+      // edgeAnimated = false;
     }
 
     const isRootNode = node.id === 'root';
@@ -423,23 +374,22 @@ function convertTreeToFlow(node, parentId = null, elements = { nodes: [], edges:
     const rawWidth = node.width || 210;
     const alignedWidth = Math.round(rawWidth / 30) * 30;
 
+    // Nur definierte Felder in data aufnehmen, um Objekt-Keys stabil zu halten
+    const nodeData = {
+      label: node.label,
+      isRootNode: isRootNode,
+      width: alignedWidth,
+    };
+    if (node.status) nodeData.status = node.status;
+    if (node.oldLabel) nodeData.oldLabel = node.oldLabel;
+    if (node.isNewInstantEditing) nodeData.isNewInstantEditing = node.isNewInstantEditing;
+    if (borderColor) nodeData.borderColor = borderColor;
+    if (backgroundColor) nodeData.backgroundColor = backgroundColor;
+
     elements.nodes.push({
       id: node.id,
-      type: !!node.status ? 'proposalNode' : 'default',
-      data: { 
-        label: node.label, 
-        status: node.status, 
-        oldLabel: node.oldLabel,
-        isRootNode: isRootNode,
-        borderColor: borderColor,
-        backgroundColor: backgroundColor,
-        onLabelChange: (nodeId, newValue) => {
-          window.dispatchEvent(new CustomEvent('reactflow-live-label', {
-            detail: { nodeId, value: newValue }
-          }));
-        },
-        width: alignedWidth,
-      },
+      type: isProposal ? 'proposalNode' : 'default',
+      data: nodeData,
       position: { x: 0, y: 0 },
       style: {
         width: alignedWidth,
@@ -447,7 +397,7 @@ function convertTreeToFlow(node, parentId = null, elements = { nodes: [], edges:
         border: 'none',
         padding: 0,
         boxShadow: 'none',
-        zIndex: isProposal ? '1' : '0'
+        zIndex: isProposal ? 1 : 0
       },
     });
 
@@ -472,34 +422,33 @@ function convertTreeToFlow(node, parentId = null, elements = { nodes: [], edges:
   return elements;
 }
 
-function MindmapBoardContent({ rawData, currentFileName, positions, setMindmapData, onNodesSelect, selectedNodeIds = [] }) {
+export function MindmapBoardContent({ rawData, currentFileName, positions, onDeleteNodes, setMindmapData, onNodesSelect, selectedNodeIds = [] }) {
+  console.log(`MindmapBoardContent Render`);
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-  const { getViewport, setViewport, getNodes, fitView, screenToFlowPosition } = useReactFlow();
+  const { getNodes, fitView, screenToFlowPosition } = useReactFlow();
+
+  const onEdgesChangeCustom = useCallback((changes) => {
+    console.log("onEdgesChangeCustom called", changes);
+    onEdgesChange(changes);
+  }, [onEdgesChange]);
+
+  const nodeTypes = useMemo(() => ({
+    default: EditableMindmapNode,
+    proposalNode: EditableMindmapNode
+  }), []);
 
   const positionsRef = useRef(positions);
   useEffect(() => {
     positionsRef.current = positions;
   }, [positions]);
 
-  // useEffect(() => {
-  // if (!currentFileName) return;
-
-  // const timer = setTimeout(() => {
-  //   if (typeof fitView === 'function') {
-  //     fitView({ padding: 0.2, duration: 0 });
-  //   }
-  // }, 50);
-
-  //   return () => clearTimeout(timer);
-  // }, [currentFileName, fitView]);
-
   const selectedNodeIdsRef = useRef(selectedNodeIds);
   useEffect(() => {
     selectedNodeIdsRef.current = selectedNodeIds;
   }, [selectedNodeIds]);
 
-useEffect(() => {
+  useEffect(() => {
     if (!rawData) return;
 
     const elements = { nodes: [], edges: [] };
@@ -559,132 +508,187 @@ useEffect(() => {
   }, [rawData, setNodes, setEdges, setMindmapData]);
 
 
-const onNodesChangeCustom = (changes) => {
+  const onNodesChangeCustom = useCallback((changes) => {
+    console.log("onNodesChangeCustom called", changes);
     // 1. Root-Knoten darf nicht gelöscht werden
-    const filteredChanges = changes.filter(c => {
-      if (c.type === 'remove' && c.id === 'root') return false;
-      return true;
-    });
+    const filteredChanges = changes.filter(c => !(c.type === 'remove' && c.id === 'root'));
 
-    // 2. Änderungen anwenden (inklusive 'dimensions' für das Resizing!)
-    setNodes((currentNodes) => applyNodeChanges(filteredChanges, currentNodes));
+    onNodesChange(filteredChanges);
 
-    // 3. Struktur-Änderungen an übergeordnetes System weitergeben
-    // Wir lassen 'dimensions' hier bewusst durch, damit React Flow die neuen Box-Größen registriert
-    const structuralChange = filteredChanges.some(
-      c => c.type !== 'position' && c.type !== 'select' && c.type !== 'dimensions'
-    );
+    // 3. Lösch-Event feuern
+    const removeChanges = filteredChanges.filter(c => c.type === 'remove');
+    if (removeChanges.length > 0) {
+      console.log("Dispatching reactflow-nodes-delete", removeChanges.map(c => c.id));
+      window.dispatchEvent(new CustomEvent('reactflow-nodes-delete', { 
+        detail: { nodeIds: removeChanges.map(c => c.id) } 
+      }));
+    }
+  }, [onNodesChange]);
+
+  const onNodeDragStopCustom = useCallback((event, node) => {
+    console.log("onNodeDragStopCustom called", node.id, node.position);
+    setMindmapData((prev) => {
+       if (!prev) return prev;
+       
+       const nodesToUpdate = getNodes().filter(n => n.selected);
+       if (nodesToUpdate.length === 0) {
+         nodesToUpdate.push(node);
+       }
+
+       const gridSize = 15;
+       let hasChanged = false;
+       const newPositions = { ...(prev.positions || {}) };
+
+       nodesToUpdate.forEach(n => {
+         const snappedX = Math.round(n.position.x / gridSize) * gridSize;
+         const snappedY = Math.round(n.position.y / gridSize) * gridSize;
+         
+         const oldPos = prev.positions?.[n.id];
+         if (!oldPos || oldPos.x !== snappedX || oldPos.y !== snappedY) {
+           newPositions[n.id] = { x: snappedX, y: snappedY };
+           hasChanged = true;
+         }
+       });
+
+       if (!hasChanged) return prev;
+       return { ...prev, positions: newPositions };
+     });
+   }, [getNodes, setMindmapData]);
+
+  const onSelectionChangeCustom = useCallback(({ nodes: selected }) => {
+    // Nur updaten, wenn sich die IDs wirklich geändert haben, um unnötige App-Rerenders zu vermeiden
+    const newIds = selected.map(n => n.id).sort().join(',');
+    const oldIds = selectedNodeIdsRef.current.map(id => id).sort().join(',');
     
-    if (structuralChange) {
-      onNodesChange(filteredChanges);
+    if (newIds !== oldIds) {
+      onNodesSelect(selected);
+    }
+  }, [onNodesSelect]);
+
+  // =========== WIRD ERSETZT? ============
+  // const dragStartRef = useRef(null);
+
+  // const handlePointerMove = (e) => {
+  //     if (!dragStartRef.current) return;
+
+  //     // 1. Differenz zur letzten Mausposition berechnen
+  //     const deltaX = e.clientX - dragStartRef.current.x;
+  //     const deltaY = e.clientY - dragStartRef.current.y;
       
-      // Wenn es ein Löschvorgang war, informieren wir die Haupt-App
-      const removeChanges = filteredChanges.filter(c => c.type === 'remove');
-      if (removeChanges.length > 0) {
-        window.dispatchEvent(new CustomEvent('reactflow-nodes-delete', { 
-          detail: { nodeIds: removeChanges.map(c => c.id) } 
-        }));
-      }
-    }
-  };
+  //     // 2. Mausposition sofort aktualisieren
+  //     dragStartRef.current = { x: e.clientX, y: e.clientY };
 
-  const dragStartRef = useRef(null);
+  //     // 3. Den bestehenden Viewport nehmen und die Differenz addieren
+  //     const { x, y, zoom } = getViewport();
+  //     setViewport({ x: x + deltaX, y: y + deltaY, zoom });
+  // };
 
-  const handlePointerMove = (e) => {
-      if (!dragStartRef.current) return;
+  // const handlePointerUp = () => {
+  //   dragStartRef.current = null;
+  //   window.removeEventListener('pointermove', handlePointerMove);
+  //   window.removeEventListener('pointerup', handlePointerUp);
+  // };
 
-      // 1. Differenz zur letzten Mausposition berechnen
-      const deltaX = e.clientX - dragStartRef.current.x;
-      const deltaY = e.clientY - dragStartRef.current.y;
-      
-      // 2. Mausposition sofort aktualisieren
-      dragStartRef.current = { x: e.clientX, y: e.clientY };
+  // const handlePointerDown = (e) => {
+  //   if (e.button === 1) {
+  //     e.preventDefault();
+  //   }
+  //   if (e.button === 2) {
+  //     dragStartRef.current = { x: e.clientX, y: e.clientY };
+  //     window.addEventListener('pointermove', handlePointerMove);
+  //     window.addEventListener('pointerup', handlePointerUp);
+  //   }
+  // };
 
-      // 3. Den bestehenden Viewport nehmen und die Differenz addieren
-      const { x, y, zoom } = getViewport();
-      setViewport({ x: x + deltaX, y: y + deltaY, zoom });
-  };
-
-  const handlePointerUp = () => {
-    dragStartRef.current = null;
-    window.removeEventListener('pointermove', handlePointerMove);
-    window.removeEventListener('pointerup', handlePointerUp);
-  };
-
-  const handlePointerDown = (e) => {
-    if (e.button === 1) {
-      e.preventDefault();
-    }
-    if (e.button === 2) {
-      dragStartRef.current = { x: e.clientX, y: e.clientY };
-      window.addEventListener('pointermove', handlePointerMove);
-      window.addEventListener('pointerup', handlePointerUp);
-    }
-  };
-
-  // Verarbeitet das Live-Event aus dem Custom-Zieh-Balken deines Knotens
 // Verarbeitet das Live-Event aus dem Custom-Zieh-Balken deines Knotens
-const handleNodeResize = (e) => {
-    const { nodeId, width, isDragging } = e.detail;
-    
-    // Ermittle alle aktuell selektierten Knoten direkt aus dem Zustand
+const handleNodeResize = useCallback((e) => {
+  const { nodeId, width, isDragging } = e.detail;
+  
+  // 1. Während des Ziehens: React-State komplett umgehen und direkt das DOM manipulieren!
+  if (isDragging) {
+    // Hol dir alle aktuell selektierten Knoten-IDs aus dem React Flow State
     const flowNodes = getNodes();
     const activeSelection = flowNodes.filter(n => n.selected).map(n => n.id);
     
+    // Bestimme, welche Knoten visuell mitskaliert werden sollen
     const targetNodeIds = activeSelection.includes(nodeId) 
       ? activeSelection 
       : [nodeId];
 
-    // 1. Live-Vorschau im React Flow State
-    setNodes((nds) =>
-      nds.map((node) => {
-        if (targetNodeIds.includes(node.id)) {
-          return {
-            ...node,
-            style: { 
-              ...node.style, 
-              width: width,
-            },
-            data: { ...node.data, width: width },
-          };
+    // Manipuliere die Breite direkt im DOM
+    targetNodeIds.forEach(id => {
+      // Wir suchen das DOM-Element anhand des data-id-Attributs, das React Flow vergibt
+      const nodeElement = document.querySelector(`[data-id="${id}"]`);
+      if (nodeElement) {
+        // 1. Ändere die Breite des äußeren React-Flow-Wrappers
+        nodeElement.style.width = `${width}px`;
+        
+        // 2. Ändere die Breite deines inneren Custom-Node-Inhalts (EditableMindmapNode)
+        const innerNode = nodeElement.querySelector('.node-content-wrapper')?.parentNode;
+        if (innerNode) {
+          innerNode.style.width = `${width}px`;
         }
-        return node;
-      })
-    );
+      }
+    });
+    return;
+  }
 
-    // 2. Erst beim Loslassen der Maus (isDragging === false) im Baum speichern
-    if (!isDragging) {
-      setMindmapData((prev) => {
-        if (!prev) return prev;
+  // 2. Erst beim Loslassen (isDragging === false): Einmaliges Update für React
+  const flowNodes = getNodes();
+  const activeSelection = flowNodes.filter(n => n.selected).map(n => n.id);
+  
+  const targetNodeIds = activeSelection.includes(nodeId) 
+    ? activeSelection 
+    : [nodeId];
 
-        const updateWidthRecursive = (node) => {
-          if (!node) return null;
-          let updatedNode = { ...node };
-          if (targetNodeIds.includes(node.id)) {
-            updatedNode.width = width;
-          }
-          if (node.children) {
-            updatedNode.children = node.children.map(updateWidthRecursive);
-          }
-          return updatedNode;
-        };
-
+  // Einmaliges Update des flachen React Flow UI-States
+  setNodes((nds) =>
+    nds.map((node) => {
+      if (targetNodeIds.includes(node.id)) {
         return {
-          ...prev,
-          rootNode: updateWidthRecursive(prev.rootNode),
-          floatingNodes: prev.floatingNodes 
-            ? prev.floatingNodes.map(updateWidthRecursive) 
-            : []
+          ...node,
+          style: { 
+            ...node.style, 
+            width: width,
+          },
+          data: { ...node.data, width: width },
         };
-      });
-    }
-  };
+      }
+      return node;
+    })
+  );
+
+  // Persistent im Baum abspeichern
+  setMindmapData((prev) => {
+    if (!prev) return prev;
+
+    const updateWidthRecursive = (node) => {
+      if (!node) return null;
+      let updatedNode = { ...node };
+      if (targetNodeIds.includes(node.id)) {
+        updatedNode.width = width;
+      }
+      if (node.children) {
+        updatedNode.children = node.children.map(updateWidthRecursive);
+      }
+      return updatedNode;
+    };
+
+    return {
+      ...prev,
+      rootNode: updateWidthRecursive(prev.rootNode),
+      floatingNodes: prev.floatingNodes 
+        ? prev.floatingNodes.map(updateWidthRecursive) 
+        : []
+    };
+  });
+}, [getNodes, setNodes, setMindmapData]);
 
   // Der Event-Listener darf nur EINMAL beim Mounten gebunden werden
   useEffect(() => {
     window.addEventListener("nodeResize", handleNodeResize);
     return () => window.removeEventListener("nodeResize", handleNodeResize);
-  }, [getNodes, setNodes, setMindmapData]);
+  }, [handleNodeResize]);
 
   const handleBulkDecision = (accepted) => {
     // Finde alle ausgewählten Knoten, die ein aktives Status-Flag besitzen
@@ -727,7 +731,7 @@ const handleNodeResize = (e) => {
 
   return (
       <div
-      onPointerDown={handlePointerDown}
+      // onPointerDown={handlePointerDown} ================= Wird ersetzt? =============
       onDoubleClick={(event) => {
         event.preventDefault();
 
@@ -769,41 +773,29 @@ const handleNodeResize = (e) => {
           edges={edges}
           nodeTypes={nodeTypes}
           deleteKeyCode={['Backspace', 'Delete']}
+          onNodesDelete={onDeleteNodes}
           onNodesChange={onNodesChangeCustom}
-          onNodeDragStop={(event, node) => {
-           setMindmapData((prev) => {
-              if (!prev) return prev;
-              const newPositions = { ...(prev.positions || {}) };
-              const gridSize = 15;
-              
-              const nodesToUpdate = getNodes().filter(n => n.selected);
-
-              nodesToUpdate.forEach(n => {
-                const snappedX = Math.round(n.position.x / gridSize) * gridSize;
-                const snappedY = Math.round(n.position.y / gridSize) * gridSize;
-                newPositions[n.id] = { x: snappedX, y: snappedY };
-              });
-
-              return { ...prev, positions: newPositions };
-            });
-          }}
-          onEdgesChange={onEdgesChange}
-          onSelectionChange={({ nodes: selected }) => {
-            onNodesSelect(selected); 
-          }}
+          onNodeDragStop={onNodeDragStopCustom}
+          onEdgesChange={onEdgesChangeCustom}
+          onSelectionChange={onSelectionChangeCustom}
           snapToGrid={true}
           snapGrid={[15, 15]}
           fitView={false}
           nodesDraggable={true}
-          panOnDrag={false}
+          // --- NATIVE RECHTSKLICK-BEWEGUNG AKTIVIEREN ---
+          panOnDrag={[2]} // [2] steht exakt für Rechtsklick!
+          onPaneContextMenu={(e) => e.preventDefault()} // Verhindert das Standard-Menü auf dem Hintergrund
+          onNodeContextMenu={(e) => e.preventDefault()} // Verhindert das Standard-Menü auf Knoten
+          onEdgeContextMenu={(e) => e.preventDefault()} // Verhindert das Standard-Menü auf Edges
+          // ----------------------------------------------
           zoomOnDoubleClick={false}
           panOnScroll={false}
           zoomOnScroll={true}
           selectionOnDrag={true}
           selectionKeyCode={null}
           selectionMode='partial'
-          translateExtent={[[-5000, -5000], [5000, 5000]]}
-          nodeExtent={[[-5000, -5000], [5000, 5000]]}
+          translateExtent={[[-10000, -10000], [10000, 10000]]}
+          nodeExtent={[[-10000, -10000], [1000, 10000]]}
         >
           <Background color="var(--text)" gap={15} size={1.5} />
 
