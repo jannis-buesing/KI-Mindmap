@@ -24,10 +24,7 @@ function App() {
   const [isSaved, setIsSaved] = useState(true);
   const isInitialLoad = useRef(true);
   const isRenamingRef = useRef(false);
-  const [selectedNodes, setSelectedNodes] = useState([]); 
-  const selectedNodeIds = useMemo(() => {
-    return selectedNodes.map(n => n.id);
-  }, [selectedNodes]);
+  const [selectedNodeIds, setSelectedNodeIds] = useState([]);
   const [userApiKey, setUserApiKey] = useState(() => {
     const savedKey = localStorage.getItem('gemini_user_api_key');
     return savedKey || '';
@@ -667,17 +664,9 @@ function App() {
   const handleUpdateSelectedNodes = useCallback((field, value, targetNodeId = null) => {
     console.log("Updating nodes: ", field, value, targetNodeId || selectedNodeIds);
     
-    setSelectedNodes(current => current.map(node => {
-      const match = targetNodeId ? node.id === targetNodeId : selectedNodeIds.includes(node.id);
-      if (match) {
-        if (field === 'label') {
-          return { ...node, data: { ...node.data, label: value } };
-        }
-        if (field === 'borderColor') {
-          return { ...node, style: { ...node.style, borderColor: value } };
-        }
-      }
-      return node;
+    // In React Flow Nodes aktualisieren (nur für UI-Anzeige)
+    window.dispatchEvent(new CustomEvent('reactflow-update-nodes-data', {
+      detail: { nodeIds: targetNodeId ? [targetNodeId] : selectedNodeIds, field, value }
     }));
 
     // 2. Persistenten Datenspeicher (Baum + Floating) aktualisieren
@@ -756,7 +745,7 @@ function App() {
             positions={mindmapData.positions} 
             onDeleteNodes={handleDeleteNodes} 
             setMindmapData={setMindmapData}
-            onNodesSelect={setSelectedNodes}
+            onNodesSelect={setSelectedNodeIds}
             selectedNodeIds={selectedNodeIds}
           />
         ) : (
@@ -783,7 +772,6 @@ function App() {
       
       <SidebarRight 
         selectedNodeIds={selectedNodeIds}
-        selectedNodes={selectedNodes} 
         onUpdateNodes={handleUpdateSelectedNodes}
       />
     </div>

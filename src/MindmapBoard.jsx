@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useMemo, memo, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useMemo, memo, useCallback, startTransition } from 'react';
 import { 
   ReactFlow, 
   Background, 
@@ -426,7 +426,13 @@ export function MindmapBoardContent({ rawData, currentFileName, positions, onDel
   console.log(`MindmapBoardContent Render`);
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-  const { getNodes, fitView, screenToFlowPosition } = useReactFlow();
+  const { getNodes, screenToFlowPosition } = useReactFlow();
+
+  // Ref, um die aktuellsten nodes zu halten, ohne Re-Render-Ketten zu triggern
+  const nodesRef = useRef(nodes);
+  useEffect(() => {
+    nodesRef.current = nodes;
+  }, [nodes]);
 
   const onEdgesChangeCustom = useCallback((changes) => {
     console.log("onEdgesChangeCustom called", changes);
@@ -605,15 +611,15 @@ const handleNodeResize = useCallback((e) => {
   const { nodeId, width, isDragging } = e.detail;
   
   // 1. Während des Ziehens: React-State komplett umgehen und direkt das DOM manipulieren!
-  if (isDragging) {
-    // Hol dir alle aktuell selektierten Knoten-IDs aus dem React Flow State
-    const flowNodes = getNodes();
-    const activeSelection = flowNodes.filter(n => n.selected).map(n => n.id);
-    
-    // Bestimme, welche Knoten visuell mitskaliert werden sollen
-    const targetNodeIds = activeSelection.includes(nodeId) 
-      ? activeSelection 
-      : [nodeId];
+    if (isDragging) {
+      // Hol dir alle aktuell selektierten Knoten-IDs aus dem React Flow State via Ref
+      const currentFlowNodes = nodesRef.current;
+      const activeSelection = currentFlowNodes.filter(n => n.selected).map(n => n.id);
+      
+      // Bestimme, welche Knoten visuell mitskaliert werden sollen
+      const targetNodeIds = activeSelection.includes(nodeId) 
+        ? activeSelection 
+        : [nodeId];
 
     // Manipuliere die Breite direkt im DOM
     targetNodeIds.forEach(id => {
@@ -641,22 +647,24 @@ const handleNodeResize = useCallback((e) => {
     ? activeSelection 
     : [nodeId];
 
-  // Einmaliges Update des flachen React Flow UI-States
-  setNodes((nds) =>
-    nds.map((node) => {
-      if (targetNodeIds.includes(node.id)) {
-        return {
-          ...node,
-          style: { 
-            ...node.style, 
-            width: width,
-          },
-          data: { ...node.data, width: width },
-        };
-      }
-      return node;
-    })
-  );
+  // Einmaliges Update des flachen React Flow UI-States mit startTransition
+  startTransition(() => {
+    setNodes((nds) =>
+      nds.map((node) => {
+        if (targetNodeIds.includes(node.id)) {
+          return {
+            ...node,
+            style: { 
+              ...node.style, 
+              width: width,
+            },
+            data: { ...node.data, width: width },
+          };
+        }
+        return node;
+      })
+    );
+  });
 
   // Persistent im Baum abspeichern
   setMindmapData((prev) => {
