@@ -51,12 +51,12 @@ export function SidebarRight({
       }
     };
 
-    window.addEventListener('reactflow-nodes-data-update', handleUpdateNodesData);
+    window.addEventListener('reactflow-update-nodes-data', handleUpdateNodesData);
     window.addEventListener('reactflow-all-nodes-init', handleAllNodes);
     
     // Cleanup
     return () => {
-      window.removeEventListener('reactflow-nodes-data-update', handleUpdateNodesData);
+      window.removeEventListener('reactflow-update-nodes-data', handleUpdateNodesData);
       window.removeEventListener('reactflow-all-nodes-init', handleAllNodes);
     };
   }, [selectedNodeIds]);
@@ -72,10 +72,9 @@ export function SidebarRight({
 
   // Helferfunktion, um die Farbe eines Knotens zu bestimmen
   const getNodeColor = (node) => {
-    if (!node?.style) return "var(--default-node-border)";
-    if (node.style.borderColor) return node.style.borderColor;
-    // Fallback, falls border-color nicht explizit gesetzt ist, aber ein border vorhanden ist
-    if (node.style.border && typeof node.style.border === 'string' && node.style.border.includes("solid")) {
+    if (node?.data?.borderColor) return node.data.borderColor;
+    if (node?.style?.borderColor) return node.style.borderColor;
+    if (node?.style?.border && typeof node.style.border === 'string' && node.style.border.includes("solid")) {
       const parts = node.style.border.split("solid ");
       if (parts[1]) return parts[1].trim();
     }

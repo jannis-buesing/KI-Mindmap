@@ -13,13 +13,71 @@ import {
   getStoredDirectoryHandle
 } from './utils/fileSystem';
 
+function migrateTreeToFlat(data) {
+  if (!data) return null;
+  if (data.nodes && data.edges) {
+    return data;
+  }
+
+  const nodes = [];
+  const edges = [];
+
+  function traverse(node, parentId = null) {
+    if (!node) return;
+
+    const flatNode = {
+      id: node.id,
+      label: node.label,
+    };
+    if (node.isRootNode || node.id === 'root') {
+      flatNode.isRootNode = true;
+    }
+    if (node.width !== undefined) flatNode.width = node.width;
+    if (node.borderColor) flatNode.borderColor = node.borderColor;
+    if (node.status) flatNode.status = node.status;
+    if (node.oldLabel) flatNode.oldLabel = node.oldLabel;
+    if (node.isNewInstantEditing) flatNode.isNewInstantEditing = node.isNewInstantEditing;
+
+    nodes.push(flatNode);
+
+    if (parentId) {
+      edges.push({
+        id: `e-${parentId}-${node.id}`,
+        source: parentId,
+        target: node.id,
+      });
+    }
+
+    if (node.children && Array.isArray(node.children)) {
+      node.children.forEach(child => traverse(child, node.id));
+    }
+  }
+
+  if (data.rootNode) {
+    traverse(data.rootNode, null);
+  }
+
+  if (data.floatingNodes && Array.isArray(data.floatingNodes)) {
+    data.floatingNodes.forEach(fNode => traverse(fNode, null));
+  }
+
+  const migrated = {
+    ...data,
+    nodes,
+    edges,
+  };
+  delete migrated.rootNode;
+  delete migrated.floatingNodes;
+
+  return migrated;
+}
+
 function App() {
   console.log("App Component Render");
   const [dirHandle, setDirHandle] = useState(null);
   const [hasPermission, setHasPermission] = useState(false);
   const [mapsList, setMapsList] = useState([]);
   const [mindmapData, setMindmapData] = useState(null);
-  // const [userInput, setUserInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [isSaved, setIsSaved] = useState(true);
   const isInitialLoad = useRef(true);
@@ -38,429 +96,271 @@ function App() {
   const [isDark, setIsDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches);
 
   useEffect(() => {
-    console.log("App Effect [prefers-color-scheme]");
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
     const handleChange = (e) => setIsDark(e.matches);
-    
     mediaQuery.addEventListener('change', handleChange);
     return () => mediaQuery.removeEventListener('change', handleChange);
   }, []);
 
   useEffect(() => {
-    console.log('App Effect [userPickedAccentColor]');
     localStorage.setItem('user_picked_accent_colors', JSON.stringify(userPickedAccentColor));
   }, [userPickedAccentColor]);
 
   useEffect(() => {
-    console.log('App Effect [userPickedAccentColor, isDark]');
     const currentMode = isDark ? 'dark' : 'light';
     const activeColor = userPickedAccentColor[currentMode];
-
     document.documentElement.style.setProperty('--accent', activeColor);
-
     const hexToRgb = (hex) => {
       let shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
       let fullHex = hex.replace(shorthandRegex, (m, r, g, b) => r + r + g + g + b + b);
       let result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(fullHex);
-      return result ? {
-        r: parseInt(result[1], 16),
-        g: parseInt(result[2], 16),
-        b: parseInt(result[3], 16)
-      } : null;
+      return result ? { r: parseInt(result[1], 16), g: parseInt(result[2], 16), b: parseInt(result[3], 16) } : null;
     };
-
     const rgb = hexToRgb(activeColor);
-
     if (rgb) {
       const bgOpacity = isDark ? 0.15 : 0.1;
       const borderOpacity = 0.5;
-
       document.documentElement.style.setProperty('--accent-bg', `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${bgOpacity})`);
       document.documentElement.style.setProperty('--accent-border', `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${borderOpacity})`);
     }
   }, [userPickedAccentColor, isDark]);
 
-  // User API-Key im Local Storage speichern
   useEffect(() => {
-    console.log('App Effect [userApiKey]');
     localStorage.setItem('gemini_user_api_key', userApiKey);
   }, [userApiKey]);
 
-  // 1. Beim Starten nachsehen, ob ein Ordner in IndexedDB schlummert
+  async function migrateAllMaps(directoryHandle) {
+    if (!directoryHandle) return;
+    try {
+      for await (const entry of directoryHandle.values()) {
+        if (entry.kind === 'file' && entry.name.endsWith('.json')) {
+          const fileHandle = await directoryHandle.getFileHandle(entry.name);
+          const file = await fileHandle.getFile();
+          const text = await file.text();
+          try {
+            const data = JSON.parse(text);
+            if (data.rootNode || !data.nodes) {
+              console.log(`Migrating file: ${entry.name}`);
+              const migratedData = migrateTreeToFlat(data);
+              await saveMindmapToFile(directoryHandle, entry.name.replace('.json', ''), migratedData, false);
+            }
+          } catch (e) { console.error(`Could not migrate ${entry.name}:`, e); }
+        }
+      }
+    } catch (err) { console.error("Migration failed:", err); }
+  }
+
   useEffect(() => {
-    console.log('App Effect [initSavedDirectory]');
     async function initSavedDirectory() {
       const savedHandle = await getStoredDirectoryHandle();
       if (savedHandle) {
         setDirHandle(savedHandle);
-        // Prüfen, ob die Erlaubnis zufällig noch aktiv ist
         const status = await savedHandle.queryPermission({ mode: 'readwrite' });
         if (status === 'granted') {
           setHasPermission(true);
+          await migrateAllMaps(savedHandle);
           const files = await loadMindmapsFromDirectory(savedHandle);
           setMapsList(files);
-        } else {
-          setHasPermission(false);
-        }
+        } else { setHasPermission(false); }
       }
     }
     initSavedDirectory();
   }, []);
 
-  // 2. Ordner verbinden ODER bestehende Berechtigung reaktivieren
   async function handleSelectDirectory() {
-    // FALL A: Ordner ist bekannt, wir brauchen nur den Chrome-Klick für die Erlaubnis
     if (dirHandle && !hasPermission) {
       const permission = await dirHandle.requestPermission({ mode: 'readwrite' });
       if (permission === 'granted') {
         setHasPermission(true);
+        await migrateAllMaps(dirHandle);
         const files = await loadMindmapsFromDirectory(dirHandle);
         setMapsList(files);
       }
       return;
     }
-
-    // FALL B: Kein Ordner da oder Nutzer will komplett wechseln -> Windows-Picker öffnen
     const handle = await selectMindmapDirectory();
     if (handle) {
       setDirHandle(handle);
       setHasPermission(true);
+      await migrateAllMaps(handle);
       const files = await loadMindmapsFromDirectory(handle);
       setMapsList(files);
     }
   }
 
-  // 3. Neue leere Mindmap erstellen
   async function handleCreateMap() {
     const uniqueId = `${Date.now()}_${Math.floor(Math.random() * 1000)}`;
     const defaultName = 'Neue Mindmap';
-
     const initialData = {
-      id: uniqueId, 
+      id: uniqueId,
       name: defaultName,
-      _currentFileName: '', 
+      _currentFileName: '',
       lastChanged: Date.now(),
       date: Date.now(),
-      rootNode: { id: 'root', label: defaultName, children: [] },
+      nodes: [{
+        id: 'root',
+        label: defaultName,
+        isRootNode: true
+      }],
+      edges: [],
       positions: {} 
     };
-
     await saveMindmapToFile(dirHandle, defaultName, initialData, false);
-    
     const files = await loadMindmapsFromDirectory(dirHandle);
     setMapsList(files);
-
     const fileInfo = files.find(f => f.id === uniqueId);
     setMindmapData({ ...initialData, _currentFileName: fileInfo?.name || defaultName });
     setIsSaved(true);
   }
 
-  // 4. Bestehende Mindmap aus Datei laden
   async function handleSelectMap(id) {
     if (!dirHandle || !hasPermission) return;
-
     const foundMap = mapsList.find(m => m.id === id);
     if(!foundMap) return;
-
     const fileHandle = await dirHandle.getFileHandle(`${foundMap.name}.json`);
     const file = await fileHandle.getFile();
     const text = await file.text();
     const parsedData = JSON.parse(text);
-
+    let dataToLoad = parsedData;
+    if (dataToLoad.rootNode || !dataToLoad.nodes) {
+      dataToLoad = migrateTreeToFlat(dataToLoad);
+    }
     isInitialLoad.current = true;
-    setMindmapData(parsedData.rootNode ? parsedData : {
-      name: foundMap.name, lastChanged: parsedData.lastChanged || file.lastModified, rootNode: parsedData, positions: {}
-    });
+    setMindmapData(dataToLoad);
     setIsSaved(true);
   }
 
   // 5. Auto-Save-Effekt
   useEffect(() => {
-    console.log('App Effect [mindmapData, dirHandle, hasPermission] (Auto-Save)');
     if (!dirHandle || !hasPermission || !mindmapData?.id) return;
-
-    if(isInitialLoad.current){
-      isInitialLoad.current = false;
-      return;
-    }
-    if (isRenamingRef.current) {
-      isRenamingRef.current = false;
-      return; 
-    }
-    
+    if(isInitialLoad.current){ isInitialLoad.current = false; return; }
+    if (isRenamingRef.current) { isRenamingRef.current = false; return; }
     setIsSaved(false);
     const delayDebounce = setTimeout(async () => {
-      console.log('Saving Mindmap Data...');
       await saveMindmapToFile(dirHandle, mindmapData.name, mindmapData, false);
       setIsSaved(true);
-
-      // const files = await loadMindmapsFromDirectory(dirHandle);
-      // setMapsList(files);
     }, 500);
-
     return () => clearTimeout(delayDebounce);
   }, [mindmapData, dirHandle, hasPermission]);
 
-  const mindmapDataRef = useRef(mindmapData);
-  useEffect(() => {
-    mindmapDataRef.current = mindmapData;
-  }, [mindmapData]);
-
-  // 6. Löschen
   async function handleDeleteMap(id) {
     const foundMap = mapsList.find(m => m.id === id);
     if (!foundMap) return;
-
     if (confirm(`Möchtest du '${foundMap.name}' wirklich löschen?`)) {
       await deleteMindmapFile(dirHandle, foundMap.name);
       const files = await loadMindmapsFromDirectory(dirHandle);
       setMapsList(files);
-      if (mindmapData?.id === id) {
-        setMindmapData(null);
-      }
+      if (mindmapData?.id === id) setMindmapData(null);
     }
   }
 
-  // 7. Umbenennen
   async function handleRenameMap(id, newName) {
     if (!newName) return;
     const foundMap = mapsList.find(m => m.id === id);
-    if (!foundMap) return;
-    if (foundMap.name === newName) return;
-
+    if (!foundMap || foundMap.name === newName) return;
     try {
       isRenamingRef.current = true;
-
       const fileHandle = await dirHandle.getFileHandle(`${foundMap.name}.json`);
       const file = await fileHandle.getFile();
       const text = await file.text();
       const data = JSON.parse(text);
-
-      const updatedData = {
-        ...data,
-        name: newName
-      }
-
+      const updatedData = { ...data, name: newName };
       await saveMindmapToFile(dirHandle, newName, updatedData, true);
       await deleteMindmapFile(dirHandle, foundMap.name);
-
       const files = await loadMindmapsFromDirectory(dirHandle);
       setMapsList(files);
-
       if (mindmapData?.id === id) {
         const updatedFileInfo = files.find(f => f.id === id);
-        setMindmapData({ 
-          ...updatedData, 
-          _currentFileName: updatedFileInfo?.name || newName 
-        });
+        setMindmapData({ ...updatedData, _currentFileName: updatedFileInfo?.name || newName });
       }
-    } catch (error) {
-      console.error("Fehler beim Umbenennen der Mindmap:", error);
-    } finally {
-      isRenamingRef.current = false;
-    }
+    } catch (error) { console.error("Fehler beim Umbenennen der Mindmap:", error); } 
+    finally { isRenamingRef.current = false; }
   }
 
-  // 8. KI Generierung
   async function expandMindmap(userInput, onFailure) {
-    if (!mindmapData?.name) {
-      alert("Bitte wähle oder erstelle zuerst eine Mindmap in der linken Leiste!");
-      return;
-    }
-
+    if (!mindmapData?.name) { alert("Bitte wähle oder erstelle zuerst eine Mindmap in der linken Leiste!"); return; }
     const targetMapId = mindmapData.id;
-
     setLoading(true);
-
     try {
-      // Ruf unsere neue Vercel Serverless Function auf
       const res = await fetch('/api/expandMindmap', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          rootNode: mindmapData.rootNode,
-          selectedNodeIds: selectedNodeIds,
-          userInput: userInput,
-          userApiKey: userApiKey.trim()
+          nodes: mindmapData.nodes, edges: mindmapData.edges, selectedNodeIds: selectedNodeIds,
+          userInput: userInput, userApiKey: userApiKey.trim()
         })
       });
-
       const responseText = await res.text();
       let data;
-      try {
-        data = responseText ? JSON.parse(responseText) : {};
-      } catch (e) {
-        throw new Error(`Ungültige Serverantwort (kein JSON): ${responseText.substring(0, 100)}...`);
-      }
-
-      if (!res.ok) {
-        throw new Error(data.error || `Serverfehler (${res.status}): ${res.statusText}`);
-      }
-      
+      try { data = responseText ? JSON.parse(responseText) : {}; } catch (e) { throw new Error(`Ungültige Serverantwort (kein JSON): ${responseText.substring(0, 100)}...`); }
+      if (!res.ok) throw new Error(data.error || `Serverfehler (${res.status}): ${res.statusText}`);
       const operations = data.operations || [];
-      console.log("Erhaltene Operationen vom Server:", operations);
-
-      // Im Baum speichern
-      const injectStatusIntoTree = (node) => {
-        if (!node) return null;
-
-        let updatedNode = { ...node };
-
-        const op = operations.find(o => o.nodeId === node.id);
-        if (op) {
-          if (op.type === 'updated') {
-            updatedNode.status = 'updated';
-            updatedNode.oldLabel = op.oldLabel;
-            updatedNode.label = op.label;
+      setMindmapData(prev => {
+        if (!prev || prev.id !== targetMapId) return prev;
+        let newNodes = [...(prev.nodes || [])];
+        let newEdges = [...(prev.edges || [])];
+        operations.forEach(op => {
+          if (op.type === 'added') {
+            newNodes.push({ id: op.temporaryId, label: op.label, status: 'added' });
+            newEdges.push({ id: `e-${op.parentId}-${op.temporaryId}`, source: op.parentId, target: op.temporaryId });
+          } else if (op.type === 'updated') {
+            newNodes = newNodes.map(node => node.id === op.nodeId ? { ...node, status: 'updated', oldLabel: node.label, label: op.label } : node);
+          } else if (op.type === 'deleted') {
+            newNodes = newNodes.map(node => (node.id === op.nodeId && node.id !== 'root') ? { ...node, status: 'deleted' } : node);
           }
-          if (op.type === 'deleted') {
-            updatedNode.status = 'deleted';
-          }
-        }
-
-        let currentChildren = node.children ? node.children.map(injectStatusIntoTree) : [];
-
-        const newChildrenOps = operations.filter(o => o.type === 'added' && o.parentId === node.id);
-        newChildrenOps.forEach(newOp => {
-          currentChildren.push({
-            id: newOp.temporaryId,
-            label: newOp.label,
-            status: 'added',
-            children: []
-          });
         });
-
-        updatedNode.children = currentChildren;
-        return updatedNode;
-      };
-
-      const newRootNode = injectStatusIntoTree(mindmapData.rootNode);
-
-      const updateMapWithNewTree = (map) => ({
-        ...map,
-        rootNode: newRootNode
+        return { ...prev, nodes: newNodes, edges: newEdges };
       });
-
-      setMindmapData(prev => (prev && prev.id === targetMapId) ? updateMapWithNewTree(prev) : prev);
-      setMapsList(prevList => prevList.map(map => map.id === targetMapId ? updateMapWithNewTree(map) : map));
-
+      setMapsList(prevList => prevList.map(map => map.id === targetMapId ? { ...map, date: Date.now() } : map));
       setLoading(false);
-
     } catch (error) {
       console.error("Fehler beim Erweitern der Mindmap:", error);
       alert(`Fehler: ${error.message}`);
-      if (onFailure){
-        onFailure();
-      }
+      if (onFailure) onFailure();
       setLoading(false);
     }
   }
 
   useEffect(() => {
     const processDecisions = (nodeIdsArray, accepted) => {
-      const applyDecisionsToTree = (map) => {
-        if (!map || !map.rootNode) return map;
-
-        const cleanTreeRecursive = (node) => {
-          if (!node) return null;
-
-          // 1. Kinder rekursiv verarbeiten
-          let processedChildren = node.children 
-            ? node.children.flatMap(child => {
-                const res = cleanTreeRecursive(child);
-                return Array.isArray(res) ? res : (res ? [res] : []);
-              })
-            : [];
-
-          // 2. Wenn dieser Knoten von der Entscheidung betroffen ist
+      const applyDecisionsToFlat = (map) => {
+        if (!map || !map.nodes) return map;
+        let newNodes = [...map.nodes];
+        let newEdges = [...(map.edges || [])];
+        const newPositions = { ...(map.positions || {}) };
+        const nodesToRemove = [];
+        newNodes = newNodes.map(node => {
           if (nodeIdsArray.includes(node.id)) {
             if (accepted) {
-              // ANGENOMMEN:
               if (node.status === 'deleted') {
-                if (node.id === 'root') {
-                  return {
-                    ...node,
-                    status: null,
-                    children: processedChildren
-                  };
-                }
-                return processedChildren; 
+                if (node.id !== 'root') { nodesToRemove.push(node.id); return null; }
+                return { ...node, status: null };
               }
-              if (node.status === 'updated') {
-                return {
-                  ...node,
-                  status: null,
-                  oldLabel: undefined,
-                  children: processedChildren
-                };
-              }
-              if (node.status === 'added') {
-                return {
-                  ...node,
-                  status: null,
-                  children: processedChildren
-                };
-              }
+              return { ...node, status: null, oldLabel: undefined };
             } else {
-              // ABGELEHNT:
               if (node.status === 'added') {
-                if (node.id === 'root') return node; // Root-Schutz
-                return null; 
+                if (node.id !== 'root') { nodesToRemove.push(node.id); return null; }
+                return node;
               }
-              if (node.status === 'updated') {
-                return {
-                  ...node,
-                  label: node.oldLabel || node.label,
-                  status: null,
-                  oldLabel: undefined,
-                  children: processedChildren
-                };
-              }
-              if (node.status === 'deleted') {
-                return {
-                  ...node,
-                  status: null,
-                  children: processedChildren
-                };
-              }
+              if (node.status === 'updated') return { ...node, label: node.oldLabel || node.label, status: null, oldLabel: undefined };
+              return { ...node, status: null };
             }
           }
-
-          // 3. Wenn nicht direkt betroffen
-          return {
-            ...node,
-            children: processedChildren
-          };
-        };
-
-        // KORREKTUR: safeMapChildren komplett entfernen und den Root direkt verarbeiten!
-        const finalRoot = cleanTreeRecursive(map.rootNode);
-
-        return {
-          ...map,
-          rootNode: finalRoot || map.rootNode
-        };
+          return node;
+        }).filter(Boolean);
+        if (nodesToRemove.length > 0) {
+          newEdges = newEdges.filter(edge => !nodesToRemove.includes(edge.source) && !nodesToRemove.includes(edge.target));
+          nodesToRemove.forEach(id => delete newPositions[id]);
+        }
+        return { ...map, nodes: newNodes, edges: newEdges, positions: newPositions };
       };
-
-      setMindmapData(prev => prev ? applyDecisionsToTree(prev) : prev);
-      setMapsList(prevList => prevList.map(map => applyDecisionsToTree(map)));
+      setMindmapData(prev => prev ? applyDecisionsToFlat(prev) : prev);
+      setMapsList(prevList => prevList.map(map => applyDecisionsToFlat(map)));
     };
-
-    const handleSingle = (e) => {
-      const { nodeId, accepted } = e.detail;
-      processDecisions([nodeId], accepted);
-    };
-
-    const handleBulk = (e) => {
-      const { nodeIds, accepted } = e.detail;
-      processDecisions(nodeIds, accepted);
-    };
-
+    const handleSingle = (e) => processDecisions([e.detail.nodeId], e.detail.accepted);
+    const handleBulk = (e) => processDecisions(e.detail.nodeIds, e.detail.accepted);
     window.addEventListener('proposalDecision', handleSingle);
     window.addEventListener('bulkProposalDecision', handleBulk);
-
     return () => {
       window.removeEventListener('proposalDecision', handleSingle);
       window.removeEventListener('bulkProposalDecision', handleBulk);
@@ -468,59 +368,25 @@ function App() {
   }, []);
 
   const eventHandlersRef = useRef({});
-
   eventHandlersRef.current = {
-  handleLiveLabel: (e) => {
-    const { nodeId, value } = e.detail;
-    handleUpdateSelectedNodes('label', value, nodeId);
-  },
-  handleNodeDelete: (e) => {
-    const { nodeIds } = e.detail;
-    handleDeleteNodes(nodeIds);
-  },
-  handleNodeCreate: (e) => {
-    const { position, parentId } = e.detail;
-    handleCreateNode(position, parentId);
-  },
-  handleNodeInitialized: (e) => {
-    const { nodeId } = e.detail;
-    
-    setMindmapData((prev) => {
-      if (!prev) return prev;
-
-      const disableIsNewRecursive = (node) => {
-        if (!node) return null;
-        let updatedNode = { ...node };
-        
-        if (node.id === nodeId) {
-          updatedNode.isNewInstantEditing = false;
-        }
-        
-        if (node.children) {
-          updatedNode.children = node.children.map(disableIsNewRecursive);
-        }
-        return updatedNode;
-      };
-
-      return {
-        ...prev,
-        rootNode: disableIsNewRecursive(prev.rootNode),
-        floatingNodes: prev.floatingNodes 
-          ? prev.floatingNodes.map(disableIsNewRecursive) 
-          : []
-      };
-    });
-  }
-};
+    handleLiveLabel: (e) => handleUpdateSelectedNodes('label', e.detail.value, e.detail.nodeId),
+    handleNodeDelete: (e) => handleDeleteNodes(e.detail.nodeIds),
+    handleNodeCreate: (e) => handleCreateNode(e.detail.position, e.detail.parentId),
+    handleNodeInitialized: (e) => {
+      setMindmapData((prev) => {
+        if (!prev) return prev;
+        const newNodes = (prev.nodes || []).map(node => node.id === e.detail.nodeId ? { ...node, isNewInstantEditing: false } : node);
+        return { ...prev, nodes: newNodes };
+      });
+    }
+  };
 
   useEffect(() => {
     const trigger = (name) => (e) => eventHandlersRef.current[name]?.(e);
-
     const onLiveLabel = trigger('handleLiveLabel');
     const onNodeDelete = trigger('handleNodeDelete');
     const onNodeCreate = trigger('handleNodeCreate');
     const onNodeInit = trigger('handleNodeInitialized');
-    
     window.addEventListener('reactflow-live-label', onLiveLabel);
     window.addEventListener('reactflow-nodes-delete', onNodeDelete);
     window.addEventListener('reactflow-node-create', onNodeCreate);
@@ -535,184 +401,56 @@ function App() {
 
   const handleCreateNode = useCallback((position, parentId) => {
     const newNodeId = `node_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-    const newNode = {
-      id: newNodeId,
-      label: 'Neuer Knoten',
-      isNewInstantEditing: 'true',
-      children: []
-    };
-
+    const newNode = { id: newNodeId, label: 'Neuer Knoten', isNewInstantEditing: true };
     setMindmapData((prev) => {
       if (!prev) return prev;
-
-      let newRootNode = prev.rootNode;
-      let newFloatingNodes = [...(prev.floatingNodes || [])];
-
-      if (!parentId) {
-        // 1. KNOTEN HAT KEINEN ELTERNTEIL -> Als freien Knoten sichern
-        newFloatingNodes.push(newNode);
-      } else {
-        // 2. KNOTEN HAT EINEN ELTERNTEIL
-        const addNodeRecursive = (node) => {
-          if (!node) return null;
-          if (node.id === parentId) {
-            return {
-              ...node,
-              children: [...(node.children || []), newNode]
-            };
-          }
-          return {
-            ...node,
-            children: node.children ? node.children.map(addNodeRecursive) : []
-          };
-        };
-
-        const updatedRoot = addNodeRecursive(prev.rootNode);
-        
-        // OPTIMIERT: Referenzvergleich statt dem schweren JSON.stringify!
-        if (updatedRoot === prev.rootNode) {
-          // Der Elternknoten war nicht im Hauptbaum -> In floatingNodes suchen
-          newFloatingNodes = newFloatingNodes.map(node => addNodeRecursive(node)).filter(Boolean);
-        } else {
-          newRootNode = updatedRoot;
-        }
-      }
-
-      // Position für React Flow speichern
+      const newNodes = [...(prev.nodes || []), newNode];
+      const newEdges = [...(prev.edges || [])];
+      if (parentId) newEdges.push({ id: `e-${parentId}-${newNodeId}`, source: parentId, target: newNodeId });
       const newPositions = { ...prev.positions };
       newPositions[newNodeId] = position;
-
-      return {
-        ...prev,
-        rootNode: newRootNode,
-        floatingNodes: newFloatingNodes,
-        positions: newPositions
-      };
+      return { ...prev, nodes: newNodes, edges: newEdges, positions: newPositions };
     });
-
-    setTimeout(() => {
-      window.dispatchEvent(new CustomEvent('reactflow-node-created', { detail: { nodeId: newNodeId } }));
-    }, 50);
+    setTimeout(() => { window.dispatchEvent(new CustomEvent('reactflow-node-created', { detail: { nodeId: newNodeId } })); }, 50);
   }, []);
 
   const handleDeleteNodes = useCallback((nodeIds) => {
-    if (!nodeIds || nodeIds.length === 0) return;
-    
     const filteredIds = nodeIds.filter(id => id !== 'root');
     if (filteredIds.length === 0) return;
-
     setMindmapData((prev) => {
       if (!prev) return prev;
-
-      // Hilfsfunktion zur Adoption/Hochstufung von Kindern
-      const pullUpChildrenRecursive = (node) => {
-        if (!node) return null;
-
-        let processedChildren = node.children
-          ? node.children.map(pullUpChildrenRecursive).filter(Boolean)
-          : [];
-
-        const finalChildren = [];
-        processedChildren.forEach(child => {
-          if (filteredIds.includes(child.id)) {
-            if (child.children && child.children.length > 0) {
-              finalChildren.push(...child.children);
-            }
-          } else {
-            finalChildren.push(child);
-          }
-        });
-
-        return {
-          ...node,
-          children: finalChildren
-        };
-      };
-
-      // 1. Hauptbaum verarbeiten
-      const newRootNode = pullUpChildrenRecursive(prev.rootNode);
-
-      // 2. Freie Knoten verarbeiten
-      let newFloatingNodes = [];
-      const currentFloating = prev.floatingNodes || [];
-
-      currentFloating.forEach(node => {
-        if (filteredIds.includes(node.id)) {
-          // Freier Knoten wird gelöscht -> Seine Kinder werden selbst zu neuen freien Knoten!
-          if (node.children && node.children.length > 0) {
-            // Wir müssen die Kinder rekursiv säubern, falls darin tiefere gelöscht wurden
-            const cleanedChildren = node.children.map(pullUpChildrenRecursive).filter(Boolean);
-            newFloatingNodes.push(...cleanedChildren);
-          }
-        } else {
-          // Freier Knoten bleibt, aber wir säubern seine Nachfahren
-          const cleanedNode = pullUpChildrenRecursive(node);
-          if (cleanedNode) {
-            newFloatingNodes.push(cleanedNode);
-          }
-        }
-      });
-
-      return {
-        ...prev,
-        rootNode: newRootNode || prev.rootNode,
-        floatingNodes: newFloatingNodes
-      };
+      const newNodes = (prev.nodes || []).filter(node => !filteredIds.includes(node.id));
+      const newEdges = (prev.edges || []).filter(edge => !filteredIds.includes(edge.source) && !filteredIds.includes(edge.target));
+      const newPositions = { ...prev.positions };
+      filteredIds.forEach(id => delete newPositions[id]);
+      return { ...prev, nodes: newNodes, edges: newEdges, positions: newPositions };
     });
   }, []);
 
   const handleUpdateSelectedNodes = useCallback((field, value, targetNodeId = null) => {
-    console.log("Updating nodes: ", field, value, targetNodeId || selectedNodeIds);
-    
-    // In React Flow Nodes aktualisieren (nur für UI-Anzeige)
     window.dispatchEvent(new CustomEvent('reactflow-update-nodes-data', {
       detail: { nodeIds: targetNodeId ? [targetNodeId] : selectedNodeIds, field, value }
     }));
-
-    // 2. Persistenten Datenspeicher (Baum + Floating) aktualisieren
     setMindmapData((prev) => {
       if (!prev) return prev;
-
-      const updateRecursive = (treeNode) => {
-        if (!treeNode) return null;
-        let updatedNode = { ...treeNode };
-        const match = targetNodeId ? treeNode.id === targetNodeId : selectedNodeIds.includes(treeNode.id);
+      const newNodes = (prev.nodes || []).map(node => {
+        const match = targetNodeId ? node.id === targetNodeId : selectedNodeIds.includes(node.id);
         if (match) {
+          const updatedNode = { ...node };
           if (field === 'label') updatedNode.label = value;
           if (field === 'borderColor') updatedNode.borderColor = value;
+          return updatedNode;
         }
-        if (treeNode.children) {
-          updatedNode.children = treeNode.children.map(updateRecursive);
-        }
-        return updatedNode;
-      };
-
-      return {
-        ...prev,
-        rootNode: updateRecursive(prev.rootNode),
-        floatingNodes: prev.floatingNodes 
-          ? prev.floatingNodes.map(updateRecursive) 
-          : []
-      };
+        return node;
+      });
+      return { ...prev, nodes: newNodes };
     });
-  }, []);
+  }, [selectedNodeIds]);
 
-  function keinContextMenu(){
-    event.preventDefault();
-  }
-
-  // ================================================================= RETURN ======================================================================================
   return (
-    <div onContextMenu={keinContextMenu} style={{ display: 'flex', position: 'relative', flex: '1 1 auto', width: '100vw', height: '100vh', overflow: 'hidden' }}>
+    <div onContextMenu={(e) => e.preventDefault()} style={{ display: 'flex', position: 'relative', flex: '1 1 auto', width: '100vw', height: '100vh', overflow: 'hidden' }}>
       <Analytics/>
-      {loading && (
-        <style>{`
-          * {
-            cursor: wait !important;
-          }
-        `}</style>  
-      )}
-      
+      {loading && <style>{`* { cursor: wait !important; }`}</style>}
       <SidebarLeft 
         dirName={dirHandle?.name}
         onSelectDir={handleSelectDirectory}
@@ -730,14 +468,10 @@ function App() {
         setUserPickedAccentColor={setUserPickedAccentColor}
         currentMode={isDark ? 'dark' : 'light'}
       />
-
       <div style={{ flex: '1 1 20%', minWidth: '240px', padding: '30px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            {!mindmapData?.name && <h1>KI Mindmap Studio</h1>}
-          </div>
+          <div>{!mindmapData?.name && <h1>KI Mindmap Studio</h1>}</div>
         </header>
-
         {mindmapData ? (
           <MindmapBoard 
             rawData={mindmapData}
@@ -750,27 +484,21 @@ function App() {
           />
         ) : (
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--code-bg)', borderRadius: '12px', border: '1px dashed var(--border)', marginTop: '20px' }}>
-            {dirHandle && hasPermission 
-              ? 'Wähle links eine Mindmap aus oder erstelle eine neue.' 
-              : !hasPermission && dirHandle 
+            {dirHandle && hasPermission
+              ? 'Wähle links eine Mindmap aus oder erstelle eine neue.'
+              : !hasPermission && dirHandle
                 ? 'Klicke links auf "Berechtigung erteilen", um deine Mindmaps zu laden.'
                 : 'Verbinde zuerst einen Ordner auf deinem PC, um loszulegen!'}
           </div>
         )}
-
-      {/* Eingabeleiste Komponente Start */}
         <Eingabeleiste
-          // userInput={userInput}
-          // setUserInput={setUserInput}
           loading={loading}
           expandMindmap={expandMindmap}
           selectedNodeIds={selectedNodeIds}
           mindmapData={mindmapData}
         />
-        {/* Eingabeleiste Komponente Ende */}
       </div>
-      
-      <SidebarRight 
+      <SidebarRight
         selectedNodeIds={selectedNodeIds}
         onUpdateNodes={handleUpdateSelectedNodes}
       />

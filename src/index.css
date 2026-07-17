@@ -264,22 +264,10 @@ code {
   color: var(--text-h);
   border-radius: 8px;
   transition: border-color 0.1s ease, box-shadow 0.3s ease, height 0.15s ease-out;
-  /* Performance: Verhindert unnötige Repaints beim Ziehen */
-  will-change: transform, width, height;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
-  /* Temporär entfernt: -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; */
-}
-
-.node-label {
-  /* Testweise für Textschärfe */
-  transform: translateZ(0);
-}
-
-.node-textarea {
-  /* Testweise für Textschärfe */
-  transform: translateZ(0);
+  /* Antialiasing und Subpixel-Rendering verbessern die Textschärfe enorm */
+  -webkit-font-smoothing: subpixel-antialiased;
+  -moz-osx-font-smoothing: auto;
+  text-rendering: geometricPrecision;
 }
 
 .node-root {
