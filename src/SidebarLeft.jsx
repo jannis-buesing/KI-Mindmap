@@ -1,8 +1,72 @@
-import { useRef, useState, useEffect } from "react";
-import { PanelLeftClose, PanelLeftOpen, Settings, Info, Palette, Moon, Sun, RotateCcw, FolderOpen, MoreVertical, PencilLine, Trash, Plus } from "lucide-react";
+import { useRef, useState, useEffect, memo } from "react";
+import { PanelLeftClose, PanelLeftOpen, Settings, Info, Palette, Moon, Sun, RotateCcw, FolderOpen, MoreVertical, PencilLine, Trash, Plus, CircleQuestionMark } from "lucide-react";
 import { HexColorPicker } from "react-colorful";
+import TypewriterBox from "./TypeWriterBox";
 
-export function SidebarLeft({
+function MeasuredVirtualList({ items, itemHeight, renderItem }) {
+  const containerRef = useRef(null);
+  const [containerHeight, setContainerHeight] = useState(400);
+  const [scrollTop, setScrollTop] = useState(0);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (let entry of entries) {
+        setContainerHeight(entry.contentRect.height || 400);
+      }
+    });
+    resizeObserver.observe(containerRef.current);
+    setContainerHeight(containerRef.current.clientHeight || 400);
+    return () => resizeObserver.disconnect();
+  }, []);
+
+  const handleScroll = (e) => {
+    setScrollTop(e.currentTarget.scrollTop);
+  };
+
+  const totalHeight = items.length * itemHeight;
+  const startIndex = Math.max(0, Math.floor(scrollTop / itemHeight) - 3);
+  const endIndex = Math.min(items.length - 1, Math.floor((scrollTop + containerHeight) / itemHeight) + 3);
+
+  const visibleItems = [];
+  for (let i = startIndex; i <= endIndex; i++) {
+    visibleItems.push({
+      item: items[i],
+      index: i,
+      style: {
+        position: 'absolute',
+        top: i * itemHeight,
+        left: 0,
+        right: 0,
+        height: itemHeight - 8, // 8px Gap
+      },
+    });
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      onScroll={handleScroll}
+      style={{
+        flex: 1,
+        position: 'relative',
+        overflowY: 'auto',
+        height: '100%',
+        width: '100%',
+      }}
+    >
+      <div style={{ height: totalHeight, width: '100%', position: 'relative' }}>
+        {visibleItems.map(({ item, index, style }) => (
+          <div key={item.id || index} style={style}>
+            {renderItem(item, index)}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SidebarLeftComponent({
   dirName,
   onSelectDir,
   maps,
@@ -25,6 +89,16 @@ export function SidebarLeft({
   const [isOpen, setIsOpen] = useState(true);
   const [activePopup, setActivePopup] = useState(null); // 'info' | 'settings' | null
   const activePopupRef = useRef(null);
+  const Hinweissätze = [
+    "Markierte Boxen und Verbindungen per Entf / Backspace löschen.",
+    "Ziehe die rechte Kante einer Box, um die Breite einzustellen.",
+    "Verbinde zwei Boxen durch Ziehen von Kreis zu Kreis.",
+    "Alle deine Änderungen werden lokal gespeichert.",
+    "Passe die Akzentfarbe nach Deiner Vorliebe an.",
+    "Doppelklicke auf den freien Hintergrund, um eine neue Box zu erstellen."
+  ];
+  const [HinweissätzeStartIndex, setHinweisSätzeStartIndex] = useState(0);
+  const [circleQuestionMarkIsHovered, setCircleQuestionMarkIsHovered] = useState(false);
 
   const activeMapObject = maps.find((m) => m.id === currentMap);
 
@@ -53,6 +127,7 @@ export function SidebarLeft({
     }));
   };
 
+  // =================================================================== RETURN ============================================
   return (
     <div
       style={{
@@ -208,22 +283,15 @@ export function SidebarLeft({
 
           {/* Auflistung Maps Start */}
           {isOpen && (
-            <div
-              style={{
-                flex: 1,
-                overflowY: "auto",
-                display: "flex",
-                flexDirection: "column",
-                gap: "8px",
-              }}
-            >
-              {maps.map((map) => {
+            <MeasuredVirtualList
+              items={maps}
+              itemHeight={56}
+              renderItem={(map) => {
                 const isCurrentMap = currentMap === map.id;
 
                 return (
                   <div
                     className="btn_mappedMindmaps"
-                    key={map.id}
                     onClick={() => !isCurrentMap && onSelectMap(map.id)}
                     style={{
                       padding: "0 10px",
@@ -352,8 +420,8 @@ export function SidebarLeft({
                     </div>
                   </div>
                 );
-              })}
-            </div>
+              }}
+            />
           )}
           {/* Auflistung Maps Ende */}
           {/* Einstellungen Start */}
@@ -472,8 +540,11 @@ export function SidebarLeft({
                   <>
                     <h3 style={{ fontSize: '15px', marginBottom: '4px' }}>Informationen</h3>
                     <div style={{ fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      <div><strong>Version:</strong> 1.0.0</div>
-                      <div><strong>Lokaler Ordner:</strong> {dirName || "Nicht verbunden"}</div>
+                      {/* Hinweisbox-Feld */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <span style={{ fontWeight: '600', color: 'var(--text-h)' }}>Nützliche Tipps:</span>
+                        <TypewriterBox sentences={Hinweissätze} HinweissätzeStartIndex={HinweissätzeStartIndex} />
+                      </div>
                     </div>
                   </>
                 )}
@@ -486,8 +557,28 @@ export function SidebarLeft({
                       
 
                       {/* API-Key Eingabefeld */}
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '6px' }}>
-                        <span style={{ fontWeight: '600', color: 'var(--text-h)' }}>Gemini API-Key:</span>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <div
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            paddingRight: '2px'
+                          }}
+                        >
+                          <span style={{ fontWeight: '600', color: 'var(--text-h)' }}>Gemini API-Key:</span>
+                          <CircleQuestionMark
+                          onMouseEnter={() => setCircleQuestionMarkIsHovered(true)}
+                          onMouseLeave={() => setCircleQuestionMarkIsHovered(false)}
+                          style={{ 
+                            cursor: 'pointer', 
+                            color: circleQuestionMarkIsHovered ? 'var(--text-h)' : 'var(--text)', 
+                            width: '16px', 
+                            height: '16px',
+                            transition: 'color 0.2s'
+                          }}
+                          />
+                        </div>
                         <input 
                           type="password" 
                           placeholder="..." 
@@ -525,7 +616,10 @@ export function SidebarLeft({
             <button
               className="btn_32pxNormed"
               id="btn_sbl_info"
-              onClick={() => handleButtonClick('info')}
+              onClick={() => {
+                setHinweisSätzeStartIndex(Math.floor(Math.random() * Hinweissätze.length));
+                handleButtonClick('info'); 
+              }}
               title="Informationen"
               style={{
                 color: 'var(--text-h)',
@@ -568,3 +662,5 @@ export function SidebarLeft({
     </div>
   );
 }
+
+export const SidebarLeft = memo(SidebarLeftComponent);

@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, memo } from 'react';
 import { SendHorizontal, Paperclip } from 'lucide-react';
 
 // Node Indicator Badge Start
-  export const NodeIndicatorBadge = ({ count }) => {
+  export const NodeIndicatorBadge = ({ count, isEdgeSelectMode }) => {
     if (count === 0) return null;
+    if (isEdgeSelectMode) return;
 
     // 1. Dynamischer Titel für grammatikalische Korrektheiten
     const titleText = count === 1
@@ -62,11 +63,12 @@ import { SendHorizontal, Paperclip } from 'lucide-react';
 };
 // Node Indicator Badge Ende
 
-export function Eingabeleiste({
+function EingabeleisteComponent({
   loading,
   expandMindmap,
   selectedNodeIds,
-  mindmapData
+  mindmapData,
+  isEdgeSelectMode
 }) {
   const [eingabeleisteIsExpanded, setEingabeleisteIsExpanded] = useState(false);
   const [userInput, setUserInput] = useState('');
@@ -164,15 +166,17 @@ export function Eingabeleiste({
           <input
             ref={inputRef}
             type="text"
-            placeholder={ selectedNodeIds.length > 1000
-              ? "1000+ Knoten bearbeiten..."
-              : selectedNodeIds.length > 1 
-                ? `${selectedNodeIds.length} Knoten bearbeiten...` 
-                : selectedNodeIds.length === 1 ?
-                  "Knoten bearbeiten..."
-                  : selectedNodeIds.length === 0
-                  ? "Mindmap erweitern..."
-                    : ""
+            placeholder={ isEdgeSelectMode
+              ? "Mindmap erweitern..." 
+              : selectedNodeIds.length > 1000
+                ? "1000+ Knoten bearbeiten..."
+                : selectedNodeIds.length > 1 
+                  ? `${selectedNodeIds.length} Knoten bearbeiten...` 
+                  : selectedNodeIds.length === 1 ?
+                    "Knoten bearbeiten..."
+                    : selectedNodeIds.length === 0
+                    ? "Mindmap erweitern..."
+                      : ""
             }
             value={userInput}
             onChange={(e) => setUserInput(e.target.value)}
@@ -195,7 +199,7 @@ export function Eingabeleiste({
           />
           
           {/* Badge links neben dem Senden-Button */}
-          <NodeIndicatorBadge count={count} />
+          <NodeIndicatorBadge count={count} isEdgeSelectMode={isEdgeSelectMode} />
 
           <button
             onClick={handleSubmit}
@@ -321,7 +325,7 @@ export function Eingabeleiste({
             
             {/* Flex-Container rechts gruppiert Badge + Button */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <NodeIndicatorBadge />
+              <NodeIndicatorBadge count={count} isEdgeSelectMode={isEdgeSelectMode} />
               
               <button
                 onClick={() => {
@@ -361,3 +365,5 @@ export function Eingabeleiste({
     </div>
   );
 }
+
+export const Eingabeleiste = memo(EingabeleisteComponent);

@@ -26,10 +26,12 @@
     --bg: #5f626e;
     --border: #2e303a;
     --code-bg: #18181b;
+    /* --code-bg: #141414; ausprobieren */
     --accent: #c084fc;
     --accent-bg: rgba(192, 132, 252, 0.15);
     --accent-border: rgba(192, 132, 252, 0.5);
     --default-node-border: #3f3f3f;
+    --edgeDelete: #e47f7f;
   }
 }
 
@@ -232,14 +234,6 @@ code {
   pointer-events: none !important;
 }
 
-/* ausgewählte Verbindungen */
-.react-flow__edge .react-flow__edge * {
-  stroke: var(--accent) !important;
-}
-
-.react-flow__edge-interaction{
-  pointer-events: none !important;
-}
 /* =================== Selections in der Mindmap Ende ====================== */
 
 
@@ -252,7 +246,7 @@ code {
 
 /* =================== SideBarRight Ende ====================== */
 
-/* Nodes in der Mindmap Start */
+/* =================== Nodes in der Mindmap Start ======================= */
 .editable-mindmap-node {
   position: relative;
   display: flex; 
@@ -282,10 +276,6 @@ code {
 
 .node-selected {
   box-shadow: 0 0 0 2px var(--accent);
-}
-
-.node-is-proposal {
-  font-weight: 600;
 }
 
 .node-deleted-label {
@@ -380,4 +370,30 @@ code {
   cursor: ew-resize;
   z-index: 999;
 }
-/* Nodes in der Mindmap Start */
+/* ===================== Nodes in der Mindmap Ende ======================= */
+
+/* ======================= Edges Start ======================= */
+
+.react-flow__edge .react-flow__edge-path {
+  stroke: #ababb8;
+  stroke-width: 1;
+  transition: stroke 0.15s ease, stroke-width 0.15s ease;
+}
+
+/* 2. Der verzögerte Hover-Effekt (Die Magie) */
+.react-flow__edge:hover .react-flow__edge-path {
+  stroke-width: 4;
+  cursor: pointer;
+}
+
+/* 3. Zustand, wenn die Linie aktiv ausgewählt/angeklickt wurde */
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke-width: 5 !important;
+  stroke: var(--edgeDelete) !important;
+}
+
+.hide-node-selection .editable-mindmap-node {
+  border-color: var(--node-default-border) !important;
+}
+
+/* ======================= Edges Ende ======================= */

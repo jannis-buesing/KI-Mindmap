@@ -127,6 +127,7 @@ export async function loadMindmapsFromDirectory(directoryHandle) {
     }
     return files.sort((a, b) => b.date - a.date);
   } catch (error) {
+    console.error("Fehler beim Laden der Mindmaps:", error);
     return [];
   }
 }

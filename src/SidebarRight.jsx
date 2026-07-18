@@ -1,10 +1,13 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, memo } from "react";
+import { RouteOff } from 'lucide-react';
 
-export function SidebarRight({
+function SidebarRightComponent({
   selectedNodeIds = [],
   onUpdateNodes,
+  isEdgeSelectMode,
+  setIsEdgeSelectMode,
 }) {
-  const isOpen = selectedNodeIds.length > 0;
+  const isOpen = selectedNodeIds.length > 0 && !isEdgeSelectMode;
   const [isHovered, setIsHovered] = useState(false);
 
   // Zustand, um die Details des ersten ausgewählten Knotens zu speichern
@@ -20,14 +23,15 @@ export function SidebarRight({
       const { nodeIds, field, value } = e.detail;
       const updatedMap = new Map(allNodesRef.current);
 
-      nodeIds.forEach(id => {
+      nodeIds.forEach((id) => {
         const currentNode = updatedMap.get(id) || { id, data: {}, style: {} };
         let newData = { ...currentNode.data };
         let newStyle = { ...currentNode.style };
 
-        if (field === 'label') {
+        if (field === "label") {
           newData.label = value;
-        } else if (field === 'borderColor') {
+        } else if (field === "borderColor") {
+          newData.borderColor = value;
           newStyle.borderColor = value;
         }
         updatedMap.set(id, { ...currentNode, data: newData, style: newStyle });
@@ -41,23 +45,31 @@ export function SidebarRight({
     };
 
     // Initial alle Nodes aus React Flow abfragen (falls bereits vorhanden)
-    const initialNodesEvent = new CustomEvent('reactflow-get-all-nodes');
+    const initialNodesEvent = new CustomEvent("reactflow-get-all-nodes");
     window.dispatchEvent(initialNodesEvent);
 
     const handleAllNodes = (e) => {
-      allNodesRef.current = new Map(e.detail.nodes.map(node => [node.id, node]));
+      allNodesRef.current = new Map(
+        e.detail.nodes.map((node) => [node.id, node]),
+      );
       if (selectedNodeIds.length > 0) {
         setFirstNodeData(allNodesRef.current.get(selectedNodeIds[0]));
       }
     };
 
-    window.addEventListener('reactflow-update-nodes-data', handleUpdateNodesData);
-    window.addEventListener('reactflow-all-nodes-init', handleAllNodes);
-    
+    window.addEventListener(
+      "reactflow-update-nodes-data",
+      handleUpdateNodesData,
+    );
+    window.addEventListener("reactflow-all-nodes-init", handleAllNodes);
+
     // Cleanup
     return () => {
-      window.removeEventListener('reactflow-update-nodes-data', handleUpdateNodesData);
-      window.removeEventListener('reactflow-all-nodes-init', handleAllNodes);
+      window.removeEventListener(
+        "reactflow-update-nodes-data",
+        handleUpdateNodesData,
+      );
+      window.removeEventListener("reactflow-all-nodes-init", handleAllNodes);
     };
   }, [selectedNodeIds]);
 
@@ -72,12 +84,9 @@ export function SidebarRight({
 
   // Helferfunktion, um die Farbe eines Knotens zu bestimmen
   const getNodeColor = (node) => {
-    if (node?.data?.borderColor) return node.data.borderColor;
+    // Priorität: style.borderColor (React Flow Live-Style) > data.borderColor (Persistierte Daten)
     if (node?.style?.borderColor) return node.style.borderColor;
-    if (node?.style?.border && typeof node.style.border === 'string' && node.style.border.includes("solid")) {
-      const parts = node.style.border.split("solid ");
-      if (parts[1]) return parts[1].trim();
-    }
+    if (node?.data?.borderColor) return node.data.borderColor;
     return "var(--default-node-border)";
   };
 
@@ -85,14 +94,18 @@ export function SidebarRight({
   const firstNode = firstNodeData;
 
   // Color ////////////////////
-  const realNodeColor = firstNode ? getNodeColor(firstNode) : "var(--default-node-border)";
+  const realNodeColor = firstNode
+    ? getNodeColor(firstNode)
+    : "var(--default-node-border)";
 
   const [currentColor, setCurrentColor] = useState("");
 
   const allShareSameColor = useMemo(() => {
     if (selectedNodeIds.length === 0) return true;
-    const firstColor = firstNode ? getNodeColor(firstNode) : "var(--default-node-border)";
-    return selectedNodeIds.every(id => {
+    const firstColor = firstNode
+      ? getNodeColor(firstNode)
+      : "var(--default-node-border)";
+    return selectedNodeIds.every((id) => {
       const node = allNodesRef.current.get(id);
       return getNodeColor(node) === firstColor;
     });
@@ -106,13 +119,13 @@ export function SidebarRight({
     setCurrentColor(allShareSameColor ? realNodeColor : "");
   }, [selectedNodeIds, allShareSameColor, realNodeColor, isOpen]);
 
- // Label //////////////////////
+  // Label //////////////////////
   const [localLabel, setLocalLabel] = useState("");
 
   const allShareSameLabel = useMemo(() => {
     if (selectedNodeIds.length === 0) return true;
     const firstLabel = firstNode?.data?.label || "";
-    return selectedNodeIds.every(id => {
+    return selectedNodeIds.every((id) => {
       const node = allNodesRef.current.get(id);
       return (node?.data?.label || "") === firstLabel;
     });
@@ -143,6 +156,8 @@ export function SidebarRight({
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
   }, [isOpen]);
 
+  // ================================== RETURN =====================================
+
   return (
     <div
       onMouseEnter={() => setIsHovered(true)}
@@ -157,7 +172,8 @@ export function SidebarRight({
         flex: "1 0 auto",
         padding: isOpen ? "16px" : "0",
         boxSizing: "border-box",
-        transition: "width 0.3s cubic-bezier(0.25, 1, 0.5, 1), padding 0.3s ease",
+        transition:
+          "width 0.3s cubic-bezier(0.25, 1, 0.5, 1), padding 0.3s ease",
         position: "relative",
         overflow: "hidden",
       }}
@@ -268,60 +284,88 @@ export function SidebarRight({
           </label>
 
           {/* Farb-Quadrate für den schnellen Zugriff */}
-          <div style={{
-            width: '100%',
-            background: 'var(--bg)',
-            padding: '6px',
-            border: '1px solid var(--border)',
-            borderRadius: '8px',
-            boxSizing: 'border-box'
-          }}>
-            <div style={{ 
-              display: 'grid', 
-              gridTemplateColumns: 'repeat(4, 1fr)', 
-              gap: '6px', 
-              width: '100%',
-              justifyItems: 'stretch'
-            }}>
-            {[
-              "var(--default-node-border)",
-              "#f59e0b", // Gelb
-              "#aa3bff", // Lila
-              "#ec4899", // Pink
-              "#10b981", // Grün
-              "#ff4a4a", // Rot
-              "#3b82f6", // Blau
-              "#f97316", // Orange
-            ].map((color) => {
-              const isSelected =
-                allShareSameColor &&
-                currentColor !== "" &&
-                currentColor.toLowerCase() === color.toLowerCase();
-              return (
-                <button
-                  className="sideBarRight_colorButton"
-                  key={color}
-                  title={color}
-                  onClick={() => onUpdateNodes("borderColor", color)}
-                  style={{
-                    width: "100%",
-                    aspectRatio: "1",
-                    background: color,
-                    border: isSelected
-                      ? "2px solid var(--accent)"
-                      : "1px solid rgba(0,0,0,0.15)",
-                    borderRadius: "6px",
-                    cursor: "pointer",
-                    transform: isSelected ? "scale(1.1)" : "scale(1)",
-                    transition: "transform 0.1s ease, border-color 0.1s ease",
-                    boxShadow: isSelected ? "0 0 8px var(--accent)" : "none",
-                  }}
-                />
-              );
-            })}
+          <div
+            style={{
+              width: "100%",
+              background: "var(--bg)",
+              padding: "6px",
+              border: "1px solid var(--border)",
+              borderRadius: "8px",
+              boxSizing: "border-box",
+            }}
+          >
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(4, 1fr)",
+                gap: "6px",
+                width: "100%",
+                justifyItems: "stretch",
+              }}
+            >
+              {[
+                "var(--default-node-border)",
+                "#f59e0b", // Gelb
+                "#aa3bff", // Lila
+                "#ec4899", // Pink
+                "#10b981", // Grün
+                "#ff4a4a", // Rot
+                "#3b82f6", // Blau
+                "#f97316", // Orange
+              ].map((color) => {
+                const isSelected =
+                  allShareSameColor &&
+                  currentColor !== "" &&
+                  currentColor.toLowerCase() === color.toLowerCase();
+                return (
+                  <button
+                    className="sideBarRight_colorButton"
+                    key={color}
+                    title={color}
+                    onClick={() => onUpdateNodes("borderColor", color)}
+                    style={{
+                      width: "100%",
+                      aspectRatio: "1",
+                      background: color,
+                      border: isSelected
+                        ? "2px solid var(--accent)"
+                        : "1px solid rgba(0,0,0,0.15)",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      transform: isSelected ? "scale(1.1)" : "scale(1)",
+                      transition: "transform 0.1s ease, border-color 0.1s ease",
+                      boxShadow: isSelected ? "0 0 8px var(--accent)" : "none",
+                    }}
+                  />
+                );
+              })}
+            </div>
           </div>
         </div>
-      </div>
+
+        {/* Button EdgeSelection */}
+        <button
+          onClick={() => setIsEdgeSelectMode(!isEdgeSelectMode)}
+          style={{
+            width: '100%',
+            padding: '10px',
+            marginTop: 'auto',
+            borderRadius: '8px',
+            border: '1px solid',
+            borderColor: isEdgeSelectMode ? '#f37f7f' : '#cbd5e1',
+            backgroundColor: isEdgeSelectMode ? '#fef2f2' : '#ffffff',
+            color: isEdgeSelectMode ? '#f37f7f' : '#334155',
+            fontWeight: '600',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '4px'
+          }}
+        >
+          <RouteOff/>Verbindungen auswählen
+        </button>
 
         {/* REIN INFORMATIVE ID-LISTE IM FUSSBEREICH */}
         {/* <div
@@ -391,3 +435,5 @@ export function SidebarRight({
     </div>
   );
 }
+
+export const SidebarRight = memo(SidebarRightComponent);

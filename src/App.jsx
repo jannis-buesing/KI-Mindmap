@@ -36,7 +36,7 @@ function migrateTreeToFlat(data) {
     if (node.borderColor) flatNode.borderColor = node.borderColor;
     if (node.status) flatNode.status = node.status;
     if (node.oldLabel) flatNode.oldLabel = node.oldLabel;
-    if (node.isNewInstantEditing) flatNode.isNewInstantEditing = node.isNewInstantEditing;
+    if (node.isNew) flatNode.isNew = node.isNew;
 
     nodes.push(flatNode);
 
@@ -91,6 +91,7 @@ function App() {
     const savedColors = localStorage.getItem('user_picked_accent_colors');
     return savedColors ? JSON.parse(savedColors) : { light: '#aa3bff', dark: '#c084fc' };
   });
+  const [isEdgeSelectMode, setIsEdgeSelectMode] = useState(false);
 
   // Akzentfarbe ändern
   const [isDark, setIsDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -129,27 +130,6 @@ function App() {
     localStorage.setItem('gemini_user_api_key', userApiKey);
   }, [userApiKey]);
 
-  async function migrateAllMaps(directoryHandle) {
-    if (!directoryHandle) return;
-    try {
-      for await (const entry of directoryHandle.values()) {
-        if (entry.kind === 'file' && entry.name.endsWith('.json')) {
-          const fileHandle = await directoryHandle.getFileHandle(entry.name);
-          const file = await fileHandle.getFile();
-          const text = await file.text();
-          try {
-            const data = JSON.parse(text);
-            if (data.rootNode || !data.nodes) {
-              console.log(`Migrating file: ${entry.name}`);
-              const migratedData = migrateTreeToFlat(data);
-              await saveMindmapToFile(directoryHandle, entry.name.replace('.json', ''), migratedData, false);
-            }
-          } catch (e) { console.error(`Could not migrate ${entry.name}:`, e); }
-        }
-      }
-    } catch (err) { console.error("Migration failed:", err); }
-  }
-
   useEffect(() => {
     async function initSavedDirectory() {
       const savedHandle = await getStoredDirectoryHandle();
@@ -158,7 +138,6 @@ function App() {
         const status = await savedHandle.queryPermission({ mode: 'readwrite' });
         if (status === 'granted') {
           setHasPermission(true);
-          await migrateAllMaps(savedHandle);
           const files = await loadMindmapsFromDirectory(savedHandle);
           setMapsList(files);
         } else { setHasPermission(false); }
@@ -167,12 +146,11 @@ function App() {
     initSavedDirectory();
   }, []);
 
-  async function handleSelectDirectory() {
+  const handleSelectDirectory = useCallback(async () => {
     if (dirHandle && !hasPermission) {
       const permission = await dirHandle.requestPermission({ mode: 'readwrite' });
       if (permission === 'granted') {
         setHasPermission(true);
-        await migrateAllMaps(dirHandle);
         const files = await loadMindmapsFromDirectory(dirHandle);
         setMapsList(files);
       }
@@ -182,13 +160,13 @@ function App() {
     if (handle) {
       setDirHandle(handle);
       setHasPermission(true);
-      await migrateAllMaps(handle);
       const files = await loadMindmapsFromDirectory(handle);
       setMapsList(files);
     }
-  }
+  }, [dirHandle, hasPermission]);
 
-  async function handleCreateMap() {
+  const handleCreateMap = useCallback(async () => {
+    if (!dirHandle) return;
     const uniqueId = `${Date.now()}_${Math.floor(Math.random() * 1000)}`;
     const defaultName = 'Neue Mindmap';
     const initialData = {
@@ -211,9 +189,9 @@ function App() {
     const fileInfo = files.find(f => f.id === uniqueId);
     setMindmapData({ ...initialData, _currentFileName: fileInfo?.name || defaultName });
     setIsSaved(true);
-  }
+  }, [dirHandle]);
 
-  async function handleSelectMap(id) {
+  const handleSelectMap = useCallback(async (id) => {
     if (!dirHandle || !hasPermission) return;
     const foundMap = mapsList.find(m => m.id === id);
     if(!foundMap) return;
@@ -228,22 +206,28 @@ function App() {
     isInitialLoad.current = true;
     setMindmapData(dataToLoad);
     setIsSaved(true);
-  }
+  }, [dirHandle, hasPermission, mapsList]);
 
-  // 5. Auto-Save-Effekt
+const [justCreatedNodeId, setJustCreatedNodeId] = useState(null);
+
+// 5. Auto-Save-Effekt
   useEffect(() => {
     if (!dirHandle || !hasPermission || !mindmapData?.id) return;
     if(isInitialLoad.current){ isInitialLoad.current = false; return; }
     if (isRenamingRef.current) { isRenamingRef.current = false; return; }
+    
     setIsSaved(false);
     const delayDebounce = setTimeout(async () => {
       await saveMindmapToFile(dirHandle, mindmapData.name, mindmapData, false);
       setIsSaved(true);
-    }, 500);
+      // Maps-Liste aktualisieren, damit die Sortierung in der Sidebar (nach Datum) aktuell bleibt
+      const files = await loadMindmapsFromDirectory(dirHandle);
+      setMapsList(files);
+    }, 800);
     return () => clearTimeout(delayDebounce);
   }, [mindmapData, dirHandle, hasPermission]);
 
-  async function handleDeleteMap(id) {
+  const handleDeleteMap = useCallback(async (id) => {
     const foundMap = mapsList.find(m => m.id === id);
     if (!foundMap) return;
     if (confirm(`Möchtest du '${foundMap.name}' wirklich löschen?`)) {
@@ -252,9 +236,9 @@ function App() {
       setMapsList(files);
       if (mindmapData?.id === id) setMindmapData(null);
     }
-  }
+  }, [dirHandle, mapsList, mindmapData]);
 
-  async function handleRenameMap(id, newName) {
+  const handleRenameMap = useCallback(async (id, newName) => {
     if (!newName) return;
     const foundMap = mapsList.find(m => m.id === id);
     if (!foundMap || foundMap.name === newName) return;
@@ -275,7 +259,7 @@ function App() {
       }
     } catch (error) { console.error("Fehler beim Umbenennen der Mindmap:", error); } 
     finally { isRenamingRef.current = false; }
-  }
+  }, [dirHandle, mapsList, mindmapData]);
 
   async function expandMindmap(userInput, onFailure) {
     if (!mindmapData?.name) { alert("Bitte wähle oder erstelle zuerst eine Mindmap in der linken Leiste!"); return; }
@@ -299,17 +283,37 @@ function App() {
         if (!prev || prev.id !== targetMapId) return prev;
         let newNodes = [...(prev.nodes || [])];
         let newEdges = [...(prev.edges || [])];
+        const newPositions = { ...(prev.positions || {}) };
+        
         operations.forEach(op => {
           if (op.type === 'added') {
+            const parentPos = newPositions[op.parentId] || { x: 0, y: 0 };
+            const gridSize = 15;
+            
+            // Zufälliger Versatz in der Nähe des Elternknotens
+            const offsetX = 240; // Rechts vom Elternteil
+            const offsetY = (Math.random() - 0.5) * 200; // Leicht versetzt nach oben/unten
+            
+            const newPos = {
+              x: Math.round((parentPos.x + offsetX) / gridSize) * gridSize,
+              y: Math.round((parentPos.y + offsetY) / gridSize) * gridSize
+            };
+            
             newNodes.push({ id: op.temporaryId, label: op.label, status: 'added' });
             newEdges.push({ id: `e-${op.parentId}-${op.temporaryId}`, source: op.parentId, target: op.temporaryId });
+            newPositions[op.temporaryId] = newPos;
+            
+            // Sofort-Edit auch für KI-Knoten (optional, hier aktiviert)
+            setTimeout(() => { 
+              window.dispatchEvent(new CustomEvent('reactflow-node-created', { detail: { nodeId: op.temporaryId } })); 
+            }, 100);
           } else if (op.type === 'updated') {
             newNodes = newNodes.map(node => node.id === op.nodeId ? { ...node, status: 'updated', oldLabel: node.label, label: op.label } : node);
           } else if (op.type === 'deleted') {
             newNodes = newNodes.map(node => (node.id === op.nodeId && node.id !== 'root') ? { ...node, status: 'deleted' } : node);
           }
         });
-        return { ...prev, nodes: newNodes, edges: newEdges };
+        return { ...prev, nodes: newNodes, edges: newEdges, positions: newPositions };
       });
       setMapsList(prevList => prevList.map(map => map.id === targetMapId ? { ...map, date: Date.now() } : map));
       setLoading(false);
@@ -371,37 +375,47 @@ function App() {
   eventHandlersRef.current = {
     handleLiveLabel: (e) => handleUpdateSelectedNodes('label', e.detail.value, e.detail.nodeId),
     handleNodeDelete: (e) => handleDeleteNodes(e.detail.nodeIds),
+    handleEdgeDelete: (e) => handleDeleteEdges(e.detail.edgeIds),
     handleNodeCreate: (e) => handleCreateNode(e.detail.position, e.detail.parentId),
     handleNodeInitialized: (e) => {
       setMindmapData((prev) => {
         if (!prev) return prev;
-        const newNodes = (prev.nodes || []).map(node => node.id === e.detail.nodeId ? { ...node, isNewInstantEditing: false } : node);
+        const newNodes = (prev.nodes || []).map(node => node.id === e.detail.nodeId ? { ...node, isNew: false } : node);
         return { ...prev, nodes: newNodes };
       });
     }
   };
 
   useEffect(() => {
-    const trigger = (name) => (e) => eventHandlersRef.current[name]?.(e);
+    const trigger = (name) => (e) => {
+      if (name === 'handleNodeInitialized') {
+        if (e.detail.nodeId === justCreatedNodeId) setJustCreatedNodeId(null);
+      }
+      return eventHandlersRef.current[name]?.(e);
+    };
     const onLiveLabel = trigger('handleLiveLabel');
     const onNodeDelete = trigger('handleNodeDelete');
+    const onEdgeDelete = trigger('handleEdgeDelete');
     const onNodeCreate = trigger('handleNodeCreate');
     const onNodeInit = trigger('handleNodeInitialized');
     window.addEventListener('reactflow-live-label', onLiveLabel);
     window.addEventListener('reactflow-nodes-delete', onNodeDelete);
+    window.addEventListener('reactflow-edges-delete', onEdgeDelete);
     window.addEventListener('reactflow-node-create', onNodeCreate);
     window.addEventListener('reactflow-node-initialized', onNodeInit);
     return () => {
       window.removeEventListener('reactflow-live-label', onLiveLabel);
       window.removeEventListener('reactflow-nodes-delete', onNodeDelete);
+      window.removeEventListener('reactflow-edges-delete', onEdgeDelete);
       window.removeEventListener('reactflow-node-create', onNodeCreate);
       window.removeEventListener('reactflow-node-initialized', onNodeInit);
     };
-  }, []);
+  }, [justCreatedNodeId]);
 
   const handleCreateNode = useCallback((position, parentId) => {
     const newNodeId = `node_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-    const newNode = { id: newNodeId, label: 'Neuer Knoten', isNewInstantEditing: true };
+    const newNode = { id: newNodeId, label: 'Neuer Knoten' };
+    setJustCreatedNodeId(newNodeId);
     setMindmapData((prev) => {
       if (!prev) return prev;
       const newNodes = [...(prev.nodes || []), newNode];
@@ -447,6 +461,23 @@ function App() {
     });
   }, [selectedNodeIds]);
 
+  const handleDeleteEdges = useCallback((edgeIds) => {
+    if (!edgeIds || edgeIds.length === 0) return;
+
+    setMindmapData((prev) => {
+      if (!prev) return prev;
+
+      // Nur die Kanten herausfiltern, deren ID in der Löschliste steht
+      const newEdges = (prev.edges || []).filter(edge => !edgeIds.includes(edge.id));
+
+      return { 
+        ...prev, 
+        edges: newEdges 
+      };
+    });
+  }, []);
+
+  // =================================== RETURN =======================================
   return (
     <div onContextMenu={(e) => e.preventDefault()} style={{ display: 'flex', position: 'relative', flex: '1 1 auto', width: '100vw', height: '100vh', overflow: 'hidden' }}>
       <Analytics/>
@@ -475,12 +506,14 @@ function App() {
         {mindmapData ? (
           <MindmapBoard 
             rawData={mindmapData}
+            setMindmapData={setMindmapData}
             currentFileName={mindmapData?.name}
             positions={mindmapData.positions} 
-            onDeleteNodes={handleDeleteNodes} 
-            setMindmapData={setMindmapData}
             onNodesSelect={setSelectedNodeIds}
             selectedNodeIds={selectedNodeIds}
+            justCreatedNodeId={justCreatedNodeId}
+            isEdgeSelectMode={isEdgeSelectMode}
+            setIsEdgeSelectMode={setIsEdgeSelectMode}
           />
         ) : (
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--code-bg)', borderRadius: '12px', border: '1px dashed var(--border)', marginTop: '20px' }}>
@@ -496,11 +529,14 @@ function App() {
           expandMindmap={expandMindmap}
           selectedNodeIds={selectedNodeIds}
           mindmapData={mindmapData}
+          isEdgeSelectMode={isEdgeSelectMode}
         />
       </div>
       <SidebarRight
         selectedNodeIds={selectedNodeIds}
         onUpdateNodes={handleUpdateSelectedNodes}
+        isEdgeSelectMode={isEdgeSelectMode}
+        setIsEdgeSelectMode={setIsEdgeSelectMode}
       />
     </div>
   );

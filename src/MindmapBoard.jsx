@@ -36,14 +36,16 @@ function EditableMindmapNodeComponent({ id, data, isConnectable, selected }) {
     }
   }, [isEditing]);
 
+  // Sofortiger Edit-Modus für neu erstellte Knoten via Event
   useEffect(() => {
-    if (data.isNewInstantEditing) {
-      setIsEditing(true);
-      window.dispatchEvent(new CustomEvent('reactflow-node-initialized', {
-        detail: { nodeId: id }
-      }));
-    }
-  }, [data.isNewInstantEditing, id]);
+    const handleCreated = (e) => {
+      if (e.detail.nodeId === id) {
+        setIsEditing(true);
+      }
+    };
+    window.addEventListener('reactflow-node-created', handleCreated);
+    return () => window.removeEventListener('reactflow-node-created', handleCreated);
+  }, [id]);
 
   const handleDoubleClick = (e) => {
     e.stopPropagation();
@@ -206,8 +208,11 @@ function EditableMindmapNodeComponent({ id, data, isConnectable, selected }) {
         width: `${currentWidth}px`,
         height: `${measuredHeight}px`,
         background: backgroundColor,
-        border: `2px solid ${borderColor}`,
+        borderWidth: '2px',
+        borderStyle: 'solid',
+        borderColor: borderColor,
         cursor: isEditing ? 'text' : 'grab',
+        '--node-default-border': data.borderColor || 'var(--default-node-border)'
       }}
     >
       {isProposal && (
@@ -228,7 +233,7 @@ function EditableMindmapNodeComponent({ id, data, isConnectable, selected }) {
         {isEditing ? (
           <textarea ref={inputRef} className='nodrag node-textarea' value={value} onChange={(e) => setValue(e.target.value)} onKeyDown={handleKeyDown} onBlur={handleBlur} rows={1} />
         ) : (
-          <div className={`node-label ${isProposal ? 'node-is-proposal' : ''} ${data.status === 'deleted' ? 'node-deleted-label' : ''}`}>{data.label}</div>
+          <div className={`node-label ${data.status === 'deleted' ? 'node-deleted-label' : ''}`}>{data.label}</div>
         )}
       </div>
       <div ref={resizeHandleRef} onMouseDown={startResizing} className="nodrag node-resize-handle" />
@@ -238,17 +243,20 @@ function EditableMindmapNodeComponent({ id, data, isConnectable, selected }) {
 }
 
 export const EditableMindmapNode = React.memo(EditableMindmapNodeComponent, (prevProps, nextProps) => {
+  // Strikter Vergleich der Props zur Reduzierung von Reconciliation-Overhead
   if (prevProps.selected !== nextProps.selected) return false;
   if (prevProps.isConnectable !== nextProps.isConnectable) return false;
+  
   const p = prevProps.data;
   const n = nextProps.data;
+  
+  // Tiefer Vergleich der Datenfelder, um unnötige Re-Renders der Knoten-Komponente zu verhindern
   return (
     p.label === n.label &&
     p.width === n.width &&
     p.status === n.status &&
     p.borderColor === n.borderColor &&
     p.backgroundColor === n.backgroundColor &&
-    p.isNewInstantEditing === n.isNewInstantEditing &&
     p.isRootNode === n.isRootNode &&
     p.oldLabel === n.oldLabel
   );
@@ -256,7 +264,7 @@ export const EditableMindmapNode = React.memo(EditableMindmapNodeComponent, (pre
 
 EditableMindmapNode.displayName = 'EditableMindmapNode';
 
-export function MindmapBoardContent({ rawData, currentFileName, positions, onDeleteNodes, setMindmapData, onNodesSelect, selectedNodeIds = [] }) {
+export function MindmapBoardContent({ rawData, setMindmapData, currentFileName, positions, onNodesSelect, selectedNodeIds = [], isEdgeSelectMode, setIsEdgeSelectMode }) {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const { getNodes, screenToFlowPosition } = useReactFlow();
@@ -271,6 +279,12 @@ export function MindmapBoardContent({ rawData, currentFileName, positions, onDel
     proposalNode: EditableMindmapNode
   }), []);
 
+  useEffect(() => {
+  if (isEdgeSelectMode) {
+    setNodes((nds) => nds.map((node) => ({ ...node, selected: false })));
+  }
+}, [isEdgeSelectMode, setNodes]);
+
   const positionsRef = useRef(positions);
   useEffect(() => { positionsRef.current = positions; }, [positions]);
 
@@ -281,20 +295,29 @@ export function MindmapBoardContent({ rawData, currentFileName, positions, onDel
     if (!rawData || !rawData.nodes) return;
 
     const flatNodes = (rawData.nodes || []).map(node => {
-      let borderColor = node.borderColor || 'var(--default-node-border)';
-      let backgroundColor = borderColor !== 'var(--default-node-border)'
-        ? `${borderColor}40`
-        : `color-mix(in srgb, var(--default-node-border) 25%, transparent)`;
+      let borderColor = node.borderColor;
+      let backgroundColor = node.backgroundColor;
 
-      if (node.status === 'updated') {
-        borderColor = '#eedf59';
-        backgroundColor = 'rgba(243, 246, 59, 0.15)';
-      } else if (node.status === 'deleted') {
-        borderColor = '#ef4444';
-        backgroundColor = 'rgba(239, 68, 68, 0.15)';
-      } else if (node.status === 'added') {
-        borderColor = '#22c55e';
-        backgroundColor = 'rgba(34, 197, 94, 0.15)';
+      // Fallback: Wenn keine benutzerdefinierte Farbe gesetzt ist, nutzen wir die Status-Farbe
+      if (!borderColor) {
+        if (node.status === 'updated') {
+          borderColor = '#eedf59';
+          backgroundColor = 'rgba(243, 246, 59, 0.15)';
+        } else if (node.status === 'deleted') {
+          borderColor = '#ef4444';
+          backgroundColor = 'rgba(239, 68, 68, 0.15)';
+        } else if (node.status === 'added') {
+          borderColor = '#22c55e';
+          backgroundColor = 'rgba(34, 197, 94, 0.15)';
+        } else {
+          borderColor = 'var(--default-node-border)';
+        }
+      }
+
+      if (!backgroundColor) {
+        backgroundColor = borderColor !== 'var(--default-node-border)'
+          ? `${borderColor}40`
+          : `color-mix(in srgb, var(--default-node-border) 25%, transparent)`;
       }
 
       const alignedWidth = Math.round((node.width || 210) / 30) * 30;
@@ -305,8 +328,7 @@ export function MindmapBoardContent({ rawData, currentFileName, positions, onDel
         borderColor: borderColor,
         backgroundColor: backgroundColor,
         status: node.status,
-        oldLabel: node.oldLabel,
-        isNewInstantEditing: node.isNewInstantEditing
+        oldLabel: node.oldLabel
       };
 
       return {
@@ -314,7 +336,7 @@ export function MindmapBoardContent({ rawData, currentFileName, positions, onDel
         type: node.status ? 'proposalNode' : 'default',
         data: nodeData,
         position: positionsRef.current?.[node.id] || { x: 0, y: 0 },
-        style: { width: alignedWidth, background: 'none', border: 'none', padding: 0, boxShadow: 'none', zIndex: node.status ? 1 : 0 }
+        style: { width: alignedWidth, background: 'none', borderWidth: 0, borderStyle: 'none', padding: 0, boxShadow: 'none', zIndex: node.status ? 1 : 0 }
       };
     });
 
@@ -328,35 +350,99 @@ export function MindmapBoardContent({ rawData, currentFileName, positions, onDel
       return { ...edge, style: edgeStyle };
     });
 
-    const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(flatNodes, flatEdges);
     const savedPositions = positionsRef.current || {};
     const currentSelectedIds = selectedNodeIdsRef.current || [];
-
-    let hasNewPositions = false;
-    const updatedPositions = { ...savedPositions };
+    
+    const allHavePositions = flatNodes.every(node => savedPositions[node.id]);
+    
+    let layoutedNodes = flatNodes;
+    let layoutedEdges = flatEdges;
+    
+    if (!allHavePositions) { 
+      const layoutResult = getLayoutedElements(flatNodes, flatEdges);
+      layoutedNodes = layoutResult.nodes;
+      layoutedEdges = layoutResult.edges;
+    }
 
     const finalNodes = layoutedNodes.map(node => {
       let baseNode = { ...node };
       if (savedPositions[node.id]) {
         baseNode.position = savedPositions[node.id];
       } else {
-        updatedPositions[node.id] = node.position;
-        hasNewPositions = true;
+        // Sicherstellen, dass neue Positionen auf dem Grid liegen
+        const gridSize = 15;
+        baseNode.position = {
+          x: Math.round(node.position.x / gridSize) * gridSize,
+          y: Math.round(node.position.y / gridSize) * gridSize
+        };
       }
       if (currentSelectedIds.includes(node.id)) baseNode.selected = true;
       return baseNode;
     });
 
-    if (hasNewPositions) {
-      setMindmapData(prev => {
-        if (!prev) return prev;
-        return { ...prev, positions: { ...(prev.positions || {}), ...updatedPositions } };
-      });
-    }
-
     setNodes(finalNodes);
     setEdges(layoutedEdges);
   }, [rawData, setNodes, setEdges, setMindmapData]);
+
+  // Edges manuell erstellen
+  const onConnect = useCallback((connection) => {
+    setMindmapData((prev) => {
+      if (!prev) return prev;
+
+      // Generiere die ID passend zu deinem bestehenden Schema (e-source-target)
+      const edgeId = `e-${connection.source}-${connection.target}`;
+
+      // Verhindern, dass dieselbe Verbindung doppelt erstellt wird
+      const edgeExists = (prev.edges || []).some(edge => edge.id === edgeId);
+      if (edgeExists) return prev;
+
+      const newEdge = {
+        id: edgeId,
+        source: connection.source,
+        target: connection.target,
+      };
+
+      return {
+        ...prev,
+        edges: [...(prev.edges || []), newEdge]
+      };
+    });
+  }, [setMindmapData]);
+
+  // Edges markieren mit Box
+  const handleSelectionEnd = useCallback(() => {
+    if (!isEdgeSelectMode) return;
+
+    const selectedNodeIds = getNodes()
+      .filter((node) => node.selected)
+      .map((node) => node.id);
+
+    if (selectedNodeIds.length > 0) {
+      setEdges((eds) =>
+        eds.map((edge) => {
+          if (selectedNodeIds.includes(edge.source) && selectedNodeIds.includes(edge.target)) {
+            return { ...edge, selected: true };
+          }
+          return edge;
+        })
+      );
+      
+      // Knoten sofort wieder abwählen
+      setNodes((nds) => nds.map((node) => ({ ...node, selected: false })));
+    }
+
+    // 2. Modus nach einmaligem Ziehen sofort wieder beenden
+    setIsEdgeSelectMode(false);
+  }, [isEdgeSelectMode, getNodes, setNodes, setEdges, setIsEdgeSelectMode]);
+
+  const handleEdgesDelete = useCallback((deletedEdges) => {
+    const edgeIds = deletedEdges.map(edge => edge.id);
+    
+    // Das Event abfeuern, auf das App.jsx jetzt lauscht
+    window.dispatchEvent(new CustomEvent('reactflow-edges-delete', {
+      detail: { edgeIds }
+    }));
+  }, []);
 
   const onNodesChangeCustom = useCallback((changes) => {
     const filteredChanges = changes.filter(c => !(c.type === 'remove' && c.id === 'root'));
@@ -448,21 +534,21 @@ export function MindmapBoardContent({ rawData, currentFileName, positions, onDel
 
   useEffect(() => {
     const handleUpdateNodesData = (e) => {
+      if (!e.detail) return;
+
       const { nodeIds, field, value } = e.detail;
+      
       setNodes((nds) => nds.map((node) => {
-        if (nodeIds.includes(node.id)) {
+        if (nodeIds && nodeIds.includes(node.id)) {
           if (field === 'label') return { ...node, data: { ...node.data, label: value } };
           if (field === 'borderColor') return { ...node, style: { ...node.style, borderColor: value } };
         }
         return node;
       }));
-      window.dispatchEvent(new CustomEvent('reactflow-nodes-data-update', { detail: { nodeIds, field, value } }));
     };
     window.addEventListener('reactflow-update-nodes-data', handleUpdateNodesData);
-    window.addEventListener('reactflow-live-label', handleUpdateNodesData);
     return () => {
       window.removeEventListener('reactflow-update-nodes-data', handleUpdateNodesData);
-      window.removeEventListener('reactflow-live-label', handleUpdateNodesData);
     };
   }, [setNodes]);
 
@@ -474,32 +560,62 @@ export function MindmapBoardContent({ rawData, currentFileName, positions, onDel
     return () => window.removeEventListener('reactflow-get-all-nodes', handleGetAllNodes);
   }, [getNodes]);
 
+
+  // ============================================
+  const displayEdges = edges.map((e) => ({
+    ...e,
+    // true im Edge-Modus (Fischnetz erlaubt), false im Normalmodus (Fischnetz ignoriert Edges)
+    selectable: isEdgeSelectMode, 
+  }));
+  // ==================================================== RETURN =========================================================
+
   return (
     <div onDoubleClick={(event) => {
         event.preventDefault();
         if (event.target.classList.contains('react-flow__pane')) {
           const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
-          window.dispatchEvent(new CustomEvent('reactflow-node-create', { detail: { position: { x: position.x - 100, y: position.y - 35 }, parentId: null } }));
+          // Zentrierung und Grid-Snapping (15px)
+          const gridSize = 15;
+          const centeredX = position.x - 110;
+          const centeredY = position.y - 35;
+          const snappedPos = {
+            x: Math.round(centeredX / gridSize) * gridSize,
+            y: Math.round(centeredY / gridSize) * gridSize
+          };
+          window.dispatchEvent(new CustomEvent('reactflow-node-create', { detail: { position: snappedPos, parentId: null } }));
         }
       }}
-      style={{ width: '100%', height: '100%', outline: '1px solid var(--border)', borderRadius: '12px', overflow: 'hidden', userSelect: 'none', display: 'flex' }}
+      style={{ width: '100%', height: '100%', outline: isEdgeSelectMode ? '1px solid var(--edgeDelete)' : '1px solid var(--border)', borderRadius: '12px', overflow: 'hidden', userSelect: 'none', display: 'flex' }}
     >
       <div style={{ flex: 1, height: '100%', position: 'relative' }}>
         <ReactFlow
+          className={isEdgeSelectMode ? 'hide-node-selection' : ''}
           proOptions={{ hideAttribution: true }}
           nodes={nodes}
-          edges={edges}
+          edges={displayEdges}
+          onEdgeClick={(event, edge) => {
+            if (!isEdgeSelectMode) {
+              setEdges((eds) =>
+                eds.map((e) =>
+                  e.id === edge.id ? { ...e, selected: !e.selected } : e
+                )
+              );
+            }
+          }}
           nodeTypes={nodeTypes}
+          onConnect={onConnect}
           deleteKeyCode={['Backspace', 'Delete']}
-          onNodesDelete={onDeleteNodes}
+          onEdgesDelete={handleEdgesDelete}
           onNodesChange={onNodesChangeCustom}
           onNodeDragStop={onNodeDragStopCustom}
           onEdgesChange={onEdgesChangeCustom} 
-          onSelectionChange={onSelectionChangeCustom} 
+          onSelectionChange={onSelectionChangeCustom}
+          onSelectionEnd={handleSelectionEnd}
           snapToGrid={true} 
           snapGrid={[15, 15]}
           fitView={false}
-          nodesDraggable={true}
+          selectNodesOnDrag={true}
+          nodesDraggable={!isEdgeSelectMode}
           panOnDrag={[2]}
           onPaneContextMenu={(e) => e.preventDefault()} 
           onNodeContextMenu={(e) => e.preventDefault()} 
@@ -516,7 +632,7 @@ export function MindmapBoardContent({ rawData, currentFileName, positions, onDel
           <Background color="var(--text)" gap={15} size={1.5} />
           <MiniMap position="bottom-left" nodeColor="var(--accent)" maskColor="rgba(0, 0, 0, 0.15)" style={{ background: 'color-mix(in srgb, var(--code-bg) 25%, transparent)', border: '1px solid var(--border)', borderRadius: '8px', width: 200, height: 150, pointerEvents: 'none', cursor: 'default' }} />
         </ReactFlow>
-        {nodes.some(n => selectedNodeIds.includes(n.id) && !!n.data?.status) && (
+        {nodes.some(n => selectedNodeIds.includes(n.id) && !!n.data?.status) && !isEdgeSelectMode && (
           <div id='div_BulkDecisionParent' style={{ position: 'absolute', top: '0', left: '50%', transform: 'translate(-50%)', zIndex: 1000, background: 'var(--code-bg)', outline: '1px solid var(--border)', borderRadius: '12px', padding: '10px 24px', display: 'flex', flexDirection: 'column', gap: '6px', justifyContent: 'center', alignItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
             <span style={{ fontSize: '14px', color: 'var(--text)', whiteSpace: 'nowrap' }}>
               {nodes.filter(n => selectedNodeIds.includes(n.id) && !!n.data?.status).length === 1 ? 'Einen Vorschlag:' : `Alle ${nodes.filter(n => selectedNodeIds.includes(n.id) && !!n.data?.status).length} Vorschläge:`}
@@ -536,10 +652,28 @@ export function MindmapBoardContent({ rawData, currentFileName, positions, onDel
   );
 }
 
-export function MindmapBoard(props){
+export const MindmapBoard = React.memo(function MindmapBoard(props){
   return (
     <ReactFlowProvider>
       <MindmapBoardContent {...props} />
     </ReactFlowProvider>
   );
-}
+}, (prevProps, nextProps) => {
+  if (prevProps.rawData !== nextProps.rawData) return false;
+  if (prevProps.setMindmapData !== nextProps.setMindmapData) return false;
+  if (prevProps.currentFileName !== nextProps.currentFileName) return false;
+  if (prevProps.positions !== nextProps.positions) return false;
+  if (prevProps.justCreatedNodeId !== nextProps.justCreatedNodeId) return false;
+  if (prevProps.onNodesSelect !== nextProps.onNodesSelect) return false;
+  if (prevProps.isEdgeSelectMode !== nextProps.isEdgeSelectMode) return false;
+  if (prevProps.setIsEdgeSelectMode !== nextProps.setIsEdgeSelectMode) return false;
+  
+  const pSel = prevProps.selectedNodeIds || [];
+  const nSel = nextProps.selectedNodeIds || [];
+  if (pSel.length !== nSel.length) return false;
+  for (let i = 0; i < pSel.length; i++) {
+    if (pSel[i] !== nSel[i]) return false;
+  }
+  
+  return true;
+});
