@@ -1,18 +1,15 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import babel from 'vite-plugin-babel';
 
-const reactCompilerPreset = require('babel-plugin-react-compiler');
+import reactCompilerPreset from 'babel-plugin-react-compiler';
 
-// https://vite.dev/config/
 export default defineConfig({
   plugins: [
-    react(),
-    babel({
-      filter: /\.[jt]sx?$/,
-      babelConfig: {
-        presets: [],
-        plugins: [reactCompilerPreset]
+    react({
+      babel: {
+        plugins: [
+          [reactCompilerPreset, {}]
+        ]
       }
     })
   ],
@@ -32,7 +29,6 @@ export default defineConfig({
             if (id.includes('@xyflow/react')) return 'react-flow';
             if (id.includes('@google/generative-ai')) return 'ai-sdk';
             if (id.includes('lucide-react')) return 'icons';
-            
             return 'vendor';
           }
         }
