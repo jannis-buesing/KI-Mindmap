@@ -75,6 +75,8 @@ function SidebarLeftComponent({
   onDeleteMap,
   onRenameMap,
   onCreateMap,
+  confirmDelete,
+  onConfirmDeleteChange,
   isSaved,
   hasPermission,
   userApiKey,
@@ -477,7 +479,16 @@ function SidebarLeftComponent({
                 {/* Inhalt Personalisierung */}
                 {activePopup === 'palette' && (
                   <>
-                    <h3 style={{ fontSize: '15px', marginBottom: '4px' }}>Personalisierung</h3>
+                    <h3 style={{ 
+                      margin: '2px 0 8px 0',
+                      fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                      fontSize: '14px', 
+                      fontWeight: 600,
+                      letterSpacing: '0.4px', 
+                      opacity: 0.9
+                    }}>
+                      Personalisierung
+                    </h3>
                     <div style={{ fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                       <div style={{ 
                         padding: '12px', 
@@ -538,7 +549,16 @@ function SidebarLeftComponent({
                 {/* Inhalt Info */}
                 {activePopup === 'info' && (
                   <>
-                    <h3 style={{ fontSize: '15px', marginBottom: '4px' }}>Informationen</h3>
+                    <h3 style={{ 
+                      margin: '2px 0 8px 0',
+                      fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                      fontSize: '14px', 
+                      fontWeight: 600,
+                      letterSpacing: '0.4px', 
+                      opacity: 0.9
+                    }}>
+                      Informationen
+                    </h3>
                     <div style={{ fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                       {/* Hinweisbox-Feld */}
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -552,10 +572,27 @@ function SidebarLeftComponent({
                 {/* Inhalt Settings */}
                 {activePopup === 'settings' && (
                   <>
-                    <h3 style={{ fontSize: '15px', marginBottom: '4px' }}>Einstellungen</h3>
+                    <h3 style={{ 
+                      margin: '2px 0 8px 0',
+                      fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                      fontSize: '14px', 
+                      fontWeight: 600,
+                      letterSpacing: '0.4px', 
+                      opacity: 0.9
+                    }}>
+                      Einstellungen
+                    </h3>
                     <div style={{ fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       
-
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <input 
+                          type="checkbox" 
+                          checked={confirmDelete} 
+                          onChange={(e) => onConfirmDeleteChange(e.target.checked)} 
+                        />
+                        Vor dem Löschen nachfragen
+                      </label>
+                      
                       {/* API-Key Eingabefeld */}
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                         <div

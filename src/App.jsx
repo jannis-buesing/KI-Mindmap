@@ -91,6 +91,7 @@ function App() {
     const savedColors = localStorage.getItem('user_picked_accent_colors');
     return savedColors ? JSON.parse(savedColors) : { light: '#aa3bff', dark: '#c084fc' };
   });
+  const [confirmDelete, setConfirmDelete] = useState(true);
   const [isEdgeSelectMode, setIsEdgeSelectMode] = useState(false);
   const labelDebounceRef = useRef(null);
   
@@ -243,16 +244,21 @@ const [justCreatedNodeId, setJustCreatedNodeId] = useState(null);
     return () => clearTimeout(delayDebounce);
   }, [mindmapData, dirHandle, hasPermission]);
 
-  const handleDeleteMap = useCallback(async (id) => {
-    const foundMap = mapsList.find(m => m.id === id);
-    if (!foundMap) return;
-    if (confirm(`Möchtest du '${foundMap.name}' wirklich löschen?`)) {
-      await deleteMindmapFile(dirHandle, foundMap.name);
-      const files = await loadMindmapsFromDirectory(dirHandle);
-      setMapsList(files);
-      if (mindmapData?.id === id) setMindmapData(null);
-    }
-  }, [dirHandle, mapsList, mindmapData]);
+const handleDeleteMap = useCallback(async (id) => {
+  const foundMap = mapsList.find(m => m.id === id);
+  if (!foundMap) return;
+  
+  const shouldDelete = confirmDelete 
+    ? confirm(`Möchtest du '${foundMap.name}' wirklich löschen?`)
+    : true;
+
+  if (shouldDelete) {
+    await deleteMindmapFile(dirHandle, foundMap.name);
+    const files = await loadMindmapsFromDirectory(dirHandle);
+    setMapsList(files);
+    if (mindmapData?.id === id) setMindmapData(null);
+  }
+}, [dirHandle, mapsList, mindmapData, confirmDelete]);
 
   const handleRenameMap = useCallback(async (id, newName) => {
     if (!newName) return;
@@ -526,6 +532,8 @@ const [justCreatedNodeId, setJustCreatedNodeId] = useState(null);
         onDeleteMap={handleDeleteMap}
         onRenameMap={handleRenameMap}
         onCreateMap={handleCreateMap}
+        confirmDelete={confirmDelete}
+        onConfirmDeleteChange={setConfirmDelete}
         isSaved={isSaved}
         hasPermission={hasPermission}
         userApiKey={userApiKey}
