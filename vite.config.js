@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import babel from '@rolldown/plugin-babel';
+import babel from 'vite-plugin-babel';
 
 const reactCompilerPreset = require('babel-plugin-react-compiler');
 
