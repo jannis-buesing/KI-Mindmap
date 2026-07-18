@@ -1,7 +1,8 @@
 import { useRef, useState, useEffect, memo } from "react";
-import { PanelLeftClose, PanelLeftOpen, Settings, Info, Palette, Moon, Sun, RotateCcw, FolderOpen, MoreVertical, PencilLine, Trash2, Plus, CircleQuestionMark } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen, Settings, Info, Palette, Moon, Sun, RotateCcw, FolderOpen, MoreVertical, PencilLine, Trash2, Plus, CircleQuestionMark, Copy } from "lucide-react";
 import { HexColorPicker } from "react-colorful";
 import TypewriterBox from "./TypeWriterBox";
+import Overlay from "./Overlay";
 
 function MeasuredVirtualList({ items, itemHeight, renderItem }) {
   const containerRef = useRef(null);
@@ -70,6 +71,8 @@ function SidebarLeftComponent({
   dirName,
   onSelectDir,
   maps,
+  nodes,
+  mindmapData,
   currentMap,
   onSelectMap,
   onDeleteMap,
@@ -86,6 +89,7 @@ function SidebarLeftComponent({
   currentMode
 }) {
   const [activeMenu, setActiveMenu] = useState(null);
+  const [showOverlay, setShowOverlay] = useState(null); // 'copy'
   const [editingName, setEditingName] = useState(null);
   const [tempName, setTempName] = useState("");
   const [isOpen, setIsOpen] = useState(true);
@@ -99,7 +103,7 @@ function SidebarLeftComponent({
     "Passe die Akzentfarbe nach Deiner Vorliebe an.",
     "Doppelklicke auf den freien Hintergrund, um eine neue Box zu erstellen."
   ];
-  const [HinweissätzeStartIndex, setHinweisSätzeStartIndex] = useState(0);
+  const [HinweissätzeStartIndex, setHinweissätzeStartIndex] = useState(0);
   const [circleQuestionMarkIsHovered, setCircleQuestionMarkIsHovered] = useState(false);
 
   const activeMapObject = maps.find((m) => m.id === currentMap);
@@ -139,7 +143,7 @@ function SidebarLeftComponent({
         display: "flex",
         flexDirection: "column",
         flex: "0 5 auto",
-        maxwidth: "25vw",
+        maxWidth: "25vw",
         minWidth: isOpen ? "225px" : "60px",
         padding: isOpen ? "20px" : "14px",
         boxSizing: "border-box",
@@ -396,6 +400,20 @@ function SidebarLeftComponent({
 
                       {activeMenu === map.id && (
                         <button
+                          title="Mindmap kopieren"
+                          onClick={() => {
+                            setShowOverlay('copy');
+
+                            setActiveMenu(null);
+                          }}
+                          className="btn_32pxNormed"
+                        >
+                          <Copy/>
+                        </button>
+                      )}
+
+                      {activeMenu === map.id && (
+                        <button
                           title="Umbenennen"
                           onClick={() => {
                             setEditingName(map.id);
@@ -584,13 +602,31 @@ function SidebarLeftComponent({
                     </h3>
                     <div style={{ fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       
-                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <label
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          width: '100%',
+                          overflow: 'hidden'
+                        }}>
                         <input 
                           type="checkbox" 
                           checked={confirmDelete} 
-                          onChange={(e) => onConfirmDeleteChange(e.target.checked)} 
+                          onChange={(e) => onConfirmDeleteChange(e.target.checked)}
+                          style={{ flexShrink: 0 }}
                         />
-                        Vor dem Löschen nachfragen
+                        <span 
+                          style={{
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            flex: 1,
+                            color: 'var(--text-h)'
+                          }}
+                        >
+                          Vor dem Löschen nachfragen
+                        </span>
                       </label>
                       
                       {/* API-Key Eingabefeld */}
@@ -654,7 +690,7 @@ function SidebarLeftComponent({
               className="btn_32pxNormed"
               id="btn_sbl_info"
               onClick={() => {
-                setHinweisSätzeStartIndex(Math.floor(Math.random() * Hinweissätze.length));
+                setHinweissätzeStartIndex(Math.floor(Math.random() * Hinweissätze.length));
                 handleButtonClick('info'); 
               }}
               title="Informationen"
@@ -696,6 +732,12 @@ function SidebarLeftComponent({
           auf die Dateien zuzugreifen. Klicke oben auf den gelben Button!
         </div>
       ) : null}
+      <Overlay 
+        type={showOverlay} 
+        onClose={() => setShowOverlay(null)} 
+        nodes={nodes}
+        mindmapData={mindmapData}
+      />
     </div>
   );
 }

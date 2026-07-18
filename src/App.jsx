@@ -527,6 +527,8 @@ const handleDeleteMap = useCallback(async (id) => {
         dirName={dirHandle?.name}
         onSelectDir={handleSelectDirectory}
         maps={mapsList}
+        nodes={mindmapData?.nodes || []}
+        mindmapData={mindmapData}
         currentMap={mindmapData?.id || ''}
         onSelectMap={handleSelectMap}
         onDeleteMap={handleDeleteMap}

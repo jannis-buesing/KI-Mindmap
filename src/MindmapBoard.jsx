@@ -159,6 +159,7 @@ function EditableMindmapNodeComponent({ id, data, isConnectable, selected }) {
   };
 
   const startResizing = (e) => {
+    if (e.button !== 0) return; // Nur Linksklick erlauben
     e.stopPropagation();
     e.preventDefault();
     const { min, max } = calculateWidthLimits();
@@ -170,6 +171,12 @@ function EditableMindmapNodeComponent({ id, data, isConnectable, selected }) {
       finalWidth: currentWidth,
       lastDispatchedWidth: currentWidth
     };
+    
+    // Sofort beim Start des Resizens Event abfeuern, um Markierung und Höhe zu aktualisieren
+    window.dispatchEvent(new CustomEvent('nodeResize', { 
+      detail: { nodeId: id, width: currentWidth, isDragging: true } 
+    }));
+    
     window.addEventListener('mousemove', doResize);
     window.addEventListener('mouseup', stopResizing);
   };
@@ -560,6 +567,18 @@ export function MindmapBoardContent({ rawData, setMindmapData, currentFileName, 
     const { nodeId, width, isDragging } = e.detail;
     if (isDragging) {
       const currentFlowNodes = nodesRef.current;
+      
+      // Falls der aktuelle Knoten noch nicht markiert ist, markieren wir ihn sofort
+      const targetNode = currentFlowNodes.find(n => n.id === nodeId);
+      if (targetNode && !targetNode.selected) {
+        setNodes((nds) => nds.map((n) => {
+          if (n.id === nodeId) {
+            return { ...n, selected: true };
+          }
+          return n;
+        }));
+      }
+
       const activeSelection = currentFlowNodes.filter(n => n.selected).map(n => n.id);
       const targetNodeIds = activeSelection.includes(nodeId) ? activeSelection : [nodeId];
       targetNodeIds.forEach(id => {
@@ -567,7 +586,29 @@ export function MindmapBoardContent({ rawData, setMindmapData, currentFileName, 
         if (nodeElement) {
           nodeElement.style.width = `${width}px`;
           const innerNode = nodeElement.querySelector('.node-content-wrapper')?.parentNode;
-          if (innerNode) innerNode.style.width = `${width}px`;
+          if (innerNode) {
+            innerNode.style.width = `${width}px`;
+            
+            // Sofortige Höhenaktualisierung beim Resizen (Höhe neu berechnen)
+            const textarea = innerNode.querySelector('textarea');
+            const labelDiv = innerNode.querySelector('.node-label');
+            
+            let textHeight = 20;
+            if (textarea) {
+              textarea.style.height = "auto";
+              textHeight = textarea.scrollHeight;
+              textarea.style.height = `${textHeight}px`;
+            } else if (labelDiv) {
+              textHeight = labelDiv.offsetHeight;
+            }
+            
+            const totalRawHeight = textHeight + 24;
+            const gridSize = 15;
+            const snappedHeight = Math.max(Math.ceil(totalRawHeight / gridSize) * gridSize, 60);
+            
+            nodeElement.style.height = `${snappedHeight}px`;
+            innerNode.style.height = `${snappedHeight}px`;
+          }
         }
       });
       return;
