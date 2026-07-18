@@ -82,7 +82,7 @@ function App() {
   const [isSaved, setIsSaved] = useState(true);
   const isInitialLoad = useRef(true);
   const isRenamingRef = useRef(false);
-  const [selectedNodeIds, setSelectedNodeIds] = useState([]);
+  const [selectedNodeIds, setSelectedNodeIds] = useState(new Set());
   const [userApiKey, setUserApiKey] = useState(() => {
     const savedKey = localStorage.getItem('gemini_user_api_key');
     return savedKey || '';
@@ -92,6 +92,8 @@ function App() {
     return savedColors ? JSON.parse(savedColors) : { light: '#aa3bff', dark: '#c084fc' };
   });
   const [isEdgeSelectMode, setIsEdgeSelectMode] = useState(false);
+  const labelDebounceRef = useRef(null);
+  
 
   // Akzentfarbe ändern
   const [isDark, setIsDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -131,16 +133,28 @@ function App() {
   }, [userApiKey]);
 
   useEffect(() => {
+    return () => {
+      if (labelDebounceRef.current) clearTimeout(labelDebounceRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
     async function initSavedDirectory() {
+      // 1. Alle asynchronen Daten im Hintergrund sammeln
       const savedHandle = await getStoredDirectoryHandle();
-      if (savedHandle) {
+      if (!savedHandle) return;
+
+      const status = await savedHandle.queryPermission({ mode: 'readwrite' });
+      
+      if (status === 'granted') {
+        const files = await loadMindmapsFromDirectory(savedHandle);
+        
         setDirHandle(savedHandle);
-        const status = await savedHandle.queryPermission({ mode: 'readwrite' });
-        if (status === 'granted') {
-          setHasPermission(true);
-          const files = await loadMindmapsFromDirectory(savedHandle);
-          setMapsList(files);
-        } else { setHasPermission(false); }
+        setHasPermission(true);
+        setMapsList(files);
+      } else {
+        setDirHandle(savedHandle);
+        setHasPermission(false);
       }
     }
     initSavedDirectory();
@@ -181,7 +195,9 @@ function App() {
         isRootNode: true
       }],
       edges: [],
-      positions: {} 
+      positions: {
+        'root': { x: 0, y: 0 }
+      } 
     };
     await saveMindmapToFile(dirHandle, defaultName, initialData, false);
     const files = await loadMindmapsFromDirectory(dirHandle);
@@ -389,7 +405,7 @@ const [justCreatedNodeId, setJustCreatedNodeId] = useState(null);
   useEffect(() => {
     const trigger = (name) => (e) => {
       if (name === 'handleNodeInitialized') {
-        if (e.detail.nodeId === justCreatedNodeId) setJustCreatedNodeId(null);
+        setJustCreatedNodeId(prev => prev === e.detail.nodeId ? null : prev);
       }
       return eventHandlersRef.current[name]?.(e);
     };
@@ -410,7 +426,7 @@ const [justCreatedNodeId, setJustCreatedNodeId] = useState(null);
       window.removeEventListener('reactflow-node-create', onNodeCreate);
       window.removeEventListener('reactflow-node-initialized', onNodeInit);
     };
-  }, [justCreatedNodeId]);
+  }, []);
 
   const handleCreateNode = useCallback((position, parentId) => {
     const newNodeId = `node_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
@@ -445,20 +461,39 @@ const [justCreatedNodeId, setJustCreatedNodeId] = useState(null);
     window.dispatchEvent(new CustomEvent('reactflow-update-nodes-data', {
       detail: { nodeIds: targetNodeId ? [targetNodeId] : selectedNodeIds, field, value }
     }));
-    setMindmapData((prev) => {
-      if (!prev) return prev;
-      const newNodes = (prev.nodes || []).map(node => {
-        const match = targetNodeId ? node.id === targetNodeId : selectedNodeIds.includes(node.id);
-        if (match) {
-          const updatedNode = { ...node };
-          if (field === 'label') updatedNode.label = value;
-          if (field === 'borderColor') updatedNode.borderColor = value;
-          return updatedNode;
-        }
-        return node;
+
+    if (field === 'label') {
+      // Bestehenden Timer löschen, falls der Nutzer weitertippt
+      if (labelDebounceRef.current) clearTimeout(labelDebounceRef.current);
+
+      // Erst nach 300ms Inaktivität wird der globale Zustand aktualisiert
+      labelDebounceRef.current = setTimeout(() => {
+        setMindmapData((prev) => {
+          if (!prev) return prev;
+          const newNodes = (prev.nodes || []).map(node => {
+            const match = targetNodeId ? node.id === targetNodeId : selectedNodeIds.includes(node.id);
+            if (match) return { ...node, label: value };
+            return node;
+          });
+          return { ...prev, nodes: newNodes };
+        });
+      }, 300);
+    } else {
+      // Andere UI-Änderungen (wie z.B. borderColor) direkt ohne Verzögerung durchreichen
+      setMindmapData((prev) => {
+        if (!prev) return prev;
+        const newNodes = (prev.nodes || []).map(node => {
+          const match = targetNodeId ? node.id === targetNodeId : selectedNodeIds.includes(node.id);
+          if (match) {
+            const updatedNode = { ...node };
+            if (field === 'borderColor') updatedNode.borderColor = value;
+            return updatedNode;
+          }
+          return node;
+        });
+        return { ...prev, nodes: newNodes };
       });
-      return { ...prev, nodes: newNodes };
-    });
+    }
   }, [selectedNodeIds]);
 
   const handleDeleteEdges = useCallback((edgeIds) => {

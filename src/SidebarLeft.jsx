@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect, memo } from "react";
-import { PanelLeftClose, PanelLeftOpen, Settings, Info, Palette, Moon, Sun, RotateCcw, FolderOpen, MoreVertical, PencilLine, Trash, Plus, CircleQuestionMark } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen, Settings, Info, Palette, Moon, Sun, RotateCcw, FolderOpen, MoreVertical, PencilLine, Trash2, Plus, CircleQuestionMark } from "lucide-react";
 import { HexColorPicker } from "react-colorful";
 import TypewriterBox from "./TypeWriterBox";
 
@@ -414,7 +414,7 @@ function SidebarLeftComponent({
                           }}
                           className="btn_32pxNormed"
                         >
-                          <Trash/>
+                          <Trash2/>
                         </button>
                       )}
                     </div>

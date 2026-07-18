@@ -13,7 +13,6 @@ import {
   Position
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { getLayoutedElements } from './utils/layout';
 import { Check, X } from 'lucide-react';
 
 function EditableMindmapNodeComponent({ id, data, isConnectable, selected }) {
@@ -340,7 +339,28 @@ export function MindmapBoardContent({ rawData, setMindmapData, currentFileName, 
       };
     });
 
-    const flatEdges = (rawData.edges || []).map(edge => {
+    const savedPositions = positionsRef.current || {};
+    const currentSelectedIds = selectedNodeIdsRef.current;
+    
+    const finalNodes = flatNodes.map(node => {
+      let baseNode = { ...node };
+      
+      if (savedPositions[node.id]) {
+        baseNode.position = savedPositions[node.id];
+      } else {
+        // Fallback, falls doch mal eine Position fehlt (z.B. frisch aus der API ohne Positions-Update)
+        baseNode.position = { x: 0, y: 0 };
+      }
+      
+      const isSelected = currentSelectedIds instanceof Set
+        ? currentSelectedIds.has(node.id)
+        : Array.isArray(currentSelectedIds) && currentSelectedIds.includes(node.id);
+
+      if (isSelected) baseNode.selected = true;
+      return baseNode;
+    });
+
+    const finalEdges = (rawData.edges || []).map(edge => {
       let edgeStyle = { stroke: 'var(--text)' };
       const targetNode = rawData.nodes.find(n => n.id === edge.target);
       if (targetNode) {
@@ -350,39 +370,84 @@ export function MindmapBoardContent({ rawData, setMindmapData, currentFileName, 
       return { ...edge, style: edgeStyle };
     });
 
-    const savedPositions = positionsRef.current || {};
-    const currentSelectedIds = selectedNodeIdsRef.current || [];
-    
-    const allHavePositions = flatNodes.every(node => savedPositions[node.id]);
-    
-    let layoutedNodes = flatNodes;
-    let layoutedEdges = flatEdges;
-    
-    if (!allHavePositions) { 
-      const layoutResult = getLayoutedElements(flatNodes, flatEdges);
-      layoutedNodes = layoutResult.nodes;
-      layoutedEdges = layoutResult.edges;
-    }
+    startTransition(() => {
+      // ================ setNodes ==================================
+      setNodes((currentNodes) => {
+        let hasChanged = false;
+        const updatedNodes = finalNodes.map((newNode) => {
+          const currentNode = currentNodes.find((n) => n.id === newNode.id);
+          if (!currentNode) {
+            hasChanged = true;
+            return newNode;
+          }
 
-    const finalNodes = layoutedNodes.map(node => {
-      let baseNode = { ...node };
-      if (savedPositions[node.id]) {
-        baseNode.position = savedPositions[node.id];
-      } else {
-        // Sicherstellen, dass neue Positionen auf dem Grid liegen
-        const gridSize = 15;
-        baseNode.position = {
-          x: Math.round(node.position.x / gridSize) * gridSize,
-          y: Math.round(node.position.y / gridSize) * gridSize
-        };
-      }
-      if (currentSelectedIds.includes(node.id)) baseNode.selected = true;
-      return baseNode;
+          // 1. Koordinaten abgleichen
+          const posChanged =
+            currentNode.position.x !== newNode.position.x ||
+            currentNode.position.y !== newNode.position.y;
+
+          // 2. Relevante Datenfelder tiefenprüfen
+          const dataChanged =
+            currentNode.data.label !== newNode.data.label ||
+            currentNode.data.width !== newNode.data.width ||
+            currentNode.data.borderColor !== newNode.data.borderColor ||
+            currentNode.data.backgroundColor !== newNode.data.backgroundColor ||
+            currentNode.data.status !== newNode.data.status ||
+            currentNode.data.oldLabel !== newNode.data.oldLabel ||
+            currentNode.data.isRootNode !== newNode.data.isRootNode;
+
+          const selectedChanged = currentNode.selected !== newNode.selected;
+          const typeChanged = currentNode.type !== newNode.type;
+
+          // Nur wenn sich wirklich etwas verändert hat, erzeugen wir ein neues Objekt
+          if (posChanged || dataChanged || selectedChanged || typeChanged) {
+            hasChanged = true;
+            return newNode;
+          }
+          return currentNode; // WICHTIG: Alte Speicher-Referenz bleibt bestehen!
+        });
+
+        if (hasChanged || currentNodes.length !== finalNodes.length) {
+          return updatedNodes;
+        }
+        return currentNodes;
+      });
+
+      // ================ setEdges ==================================
+      setEdges((currentEdges) => {
+        let hasChanged = false;
+        const updatedEdges = finalEdges.map((newEdge) => {
+          const currentEdge = currentEdges.find((e) => e.id === newEdge.id);
+          if (!currentEdge) {
+            hasChanged = true;
+            return newEdge;
+          }
+
+          const basicChanged =
+            currentEdge.source !== newEdge.source ||
+            currentEdge.target !== newEdge.target ||
+            currentEdge.selected !== newEdge.selected ||
+            currentEdge.selectable !== newEdge.selectable;
+
+          const styleChanged =
+            currentEdge.style?.stroke !== newEdge.style?.stroke ||
+            currentEdge.style?.strokeDasharray !== newEdge.style?.strokeDasharray ||
+            currentEdge.style?.strokeWidth !== newEdge.style?.strokeWidth;
+
+          if (basicChanged || styleChanged) {
+            hasChanged = true;
+            return newEdge;
+          }
+          return currentEdge; // Referenz bleibt bestehen!
+        });
+
+        if (hasChanged || currentEdges.length !== finalEdges.length) {
+          return updatedEdges;
+        }
+        return currentEdges;
+      });
     });
-
-    setNodes(finalNodes);
-    setEdges(layoutedEdges);
-  }, [rawData, setNodes, setEdges, setMindmapData]);
+  }, [rawData, setNodes, setEdges]);
 
   // Edges manuell erstellen
   const onConnect = useCallback((connection) => {
@@ -454,34 +519,41 @@ export function MindmapBoardContent({ rawData, setMindmapData, currentFileName, 
   }, [onNodesChange]);
 
   const onNodeDragStopCustom = useCallback((event, node) => {
-    setMindmapData((prev) => {
-       if (!prev) return prev;
-       const nodesToUpdate = getNodes().filter(n => n.selected);
-       if (nodesToUpdate.length === 0) nodesToUpdate.push(node);
-       const gridSize = 15;
-       let hasChanged = false;
-       const newPositions = { ...(prev.positions || {}) };
-       nodesToUpdate.forEach(n => {
-         const snappedX = Math.round(n.position.x / gridSize) * gridSize;
-         const snappedY = Math.round(n.position.y / gridSize) * gridSize;
-         const oldPos = prev.positions?.[n.id];
-         if (!oldPos || oldPos.x !== snappedX || oldPos.y !== snappedY) {
-           newPositions[n.id] = { x: snappedX, y: snappedY };
-           hasChanged = true;
-         }
-       });
-       if (!hasChanged) return prev;
-       return { ...prev, positions: newPositions };
-     });
+    startTransition(() => {
+      setMindmapData((prev) => {
+        if (!prev) return prev;
+        const nodesToUpdate = getNodes().filter(n => n.selected);
+        if (nodesToUpdate.length === 0) nodesToUpdate.push(node);
+        const gridSize = 15;
+        let hasChanged = false;
+        const newPositions = { ...(prev.positions || {}) };
+        nodesToUpdate.forEach(n => {
+          const snappedX = Math.round(n.position.x / gridSize) * gridSize;
+          const snappedY = Math.round(n.position.y / gridSize) * gridSize;
+          const oldPos = prev.positions?.[n.id];
+          if (!oldPos || oldPos.x !== snappedX || oldPos.y !== snappedY) {
+            newPositions[n.id] = { x: snappedX, y: snappedY };
+            hasChanged = true;
+          }
+        });
+        if (!hasChanged) return prev;
+        return { ...prev, positions: newPositions };
+      });
+    });
    }, [getNodes, setMindmapData]);
 
   const onSelectionChangeCustom = useCallback(({ nodes: selected }) => {
     const newIds = selected.map(n => n.id);
-    const oldIds = selectedNodeIdsRef.current;
-    if (newIds.length !== oldIds.length || newIds.some((id, index) => id !== oldIds[index])) {
-      onNodesSelect(newIds);
+    const oldIds = selectedNodeIdsRef.current || [];
+    
+    const hasChanged = newIds.length !== oldIds.length || newIds.some(id => !oldIds.includes(id));
+    
+    if (hasChanged) {
+      startTransition(() => {
+        onNodesSelect(newIds);
+        window.dispatchEvent(new CustomEvent('reactflow-all-nodes-init', { detail: { nodes: getNodes() } }));
+      });
     }
-    window.dispatchEvent(new CustomEvent('reactflow-all-nodes-init', { detail: { nodes: getNodes() } }));
   }, [onNodesSelect, getNodes]);
 
   const handleNodeResize = useCallback((e) => {
@@ -505,6 +577,8 @@ export function MindmapBoardContent({ rawData, setMindmapData, currentFileName, 
     const activeSelection = flowNodes.filter(n => n.selected).map(n => n.id);
     const targetNodeIds = activeSelection.includes(nodeId) ? activeSelection : [nodeId];
 
+    // BEIDE Zustands-Updates müssen in denselben startTransition-Block,
+    // damit sie gesammelt asynchron im Hintergrund verarbeitet werden!
     startTransition(() => {
       setNodes((nds) => nds.map((node) => {
         if (targetNodeIds.includes(node.id)) {
@@ -512,12 +586,12 @@ export function MindmapBoardContent({ rawData, setMindmapData, currentFileName, 
         }
         return node;
       }));
-    });
 
-    setMindmapData((prev) => {
-      if (!prev || !prev.nodes) return prev;
-      const newNodes = prev.nodes.map(node => targetNodeIds.includes(node.id) ? { ...node, width: width } : node);
-      return { ...prev, nodes: newNodes };
+      setMindmapData((prev) => {
+        if (!prev || !prev.nodes) return prev;
+        const newNodes = prev.nodes.map(node => targetNodeIds.includes(node.id) ? { ...node, width: width } : node);
+        return { ...prev, nodes: newNodes };
+      });
     });
   }, [getNodes, setNodes, setMindmapData]);
 
@@ -562,11 +636,10 @@ export function MindmapBoardContent({ rawData, setMindmapData, currentFileName, 
 
 
   // ============================================
-  const displayEdges = edges.map((e) => ({
+  const displayEdges = useMemo(() => edges.map((e) => ({
     ...e,
-    // true im Edge-Modus (Fischnetz erlaubt), false im Normalmodus (Fischnetz ignoriert Edges)
     selectable: isEdgeSelectMode, 
-  }));
+  })), [edges, isEdgeSelectMode]);
   // ==================================================== RETURN =========================================================
 
   return (
@@ -671,8 +744,10 @@ export const MindmapBoard = React.memo(function MindmapBoard(props){
   const pSel = prevProps.selectedNodeIds || [];
   const nSel = nextProps.selectedNodeIds || [];
   if (pSel.length !== nSel.length) return false;
-  for (let i = 0; i < pSel.length; i++) {
-    if (pSel[i] !== nSel[i]) return false;
+  
+  const pSet = new Set(pSel);
+  for (let i = 0; i < nSel.length; i++) {
+    if (!pSet.has(nSel[i])) return false;
   }
   
   return true;

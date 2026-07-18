@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, memo } from "react";
+import { useState, useEffect, useRef, memo } from "react";
 import { RouteOff } from 'lucide-react';
 
 function SidebarRightComponent({
@@ -10,18 +10,20 @@ function SidebarRightComponent({
   const isOpen = selectedNodeIds.length > 0 && !isEdgeSelectMode;
   const [isHovered, setIsHovered] = useState(false);
 
-  // Zustand, um die Details des ersten ausgewählten Knotens zu speichern
-  // Dies hilft, übermässige Re-Renders zu vermeiden, wenn sich nur die Referenz von selectedNodes ändert.
-  const [firstNodeData, setFirstNodeData] = useState(null);
+  const [nodesVersion, setNodesVersion] = useState(0);
 
-  // Ref für alle Knoten, um bei Bedarf auf aktuelle Daten zugreifen zu können
   const allNodesRef = useRef(new Map());
 
-  // Abonnieren von Updates der React Flow Nodes, um die Sidebars aktuell zu halten
+  const selectedNodeIdsRef = useRef(selectedNodeIds);
+  useEffect(() => {
+    selectedNodeIdsRef.current = selectedNodeIds;
+  }, [selectedNodeIds]);
+
   useEffect(() => {
     const handleUpdateNodesData = (e) => {
       const { nodeIds, field, value } = e.detail;
       const updatedMap = new Map(allNodesRef.current);
+      let isRelevantChange = false;
 
       nodeIds.forEach((id) => {
         const currentNode = updatedMap.get(id) || { id, data: {}, style: {} };
@@ -35,16 +37,19 @@ function SidebarRightComponent({
           newStyle.borderColor = value;
         }
         updatedMap.set(id, { ...currentNode, data: newData, style: newStyle });
+
+        // Nutze die Ref statt der State-Variable
+        if (selectedNodeIdsRef.current.includes(id)) {
+          isRelevantChange = true;
+        }
       });
       allNodesRef.current = updatedMap;
 
-      // Wenn der erste ausgewählte Knoten aktualisiert wurde, aktualisiere firstNodeData
-      if (selectedNodeIds.length > 0 && nodeIds.includes(selectedNodeIds[0])) {
-        setFirstNodeData(updatedMap.get(selectedNodeIds[0]));
+      if (isRelevantChange) {
+        setNodesVersion((v) => v + 1);
       }
     };
 
-    // Initial alle Nodes aus React Flow abfragen (falls bereits vorhanden)
     const initialNodesEvent = new CustomEvent("reactflow-get-all-nodes");
     window.dispatchEvent(initialNodesEvent);
 
@@ -52,98 +57,71 @@ function SidebarRightComponent({
       allNodesRef.current = new Map(
         e.detail.nodes.map((node) => [node.id, node]),
       );
-      if (selectedNodeIds.length > 0) {
-        setFirstNodeData(allNodesRef.current.get(selectedNodeIds[0]));
-      }
+      setNodesVersion((v) => v + 1);
     };
 
-    window.addEventListener(
-      "reactflow-update-nodes-data",
-      handleUpdateNodesData,
-    );
+    window.addEventListener("reactflow-update-nodes-data", handleUpdateNodesData);
     window.addEventListener("reactflow-all-nodes-init", handleAllNodes);
 
-    // Cleanup
     return () => {
-      window.removeEventListener(
-        "reactflow-update-nodes-data",
-        handleUpdateNodesData,
-      );
+      window.removeEventListener("reactflow-update-nodes-data", handleUpdateNodesData);
       window.removeEventListener("reactflow-all-nodes-init", handleAllNodes);
     };
-  }, [selectedNodeIds]);
-
-  // Wenn sich selectedNodeIds ändert, den firstNodeData aktualisieren
-  useEffect(() => {
-    if (selectedNodeIds.length > 0) {
-      setFirstNodeData(allNodesRef.current.get(selectedNodeIds[0]));
-    } else {
-      setFirstNodeData(null);
-    }
-  }, [selectedNodeIds]);
+  }, []);
 
   // Helferfunktion, um die Farbe eines Knotens zu bestimmen
   const getNodeColor = (node) => {
-    // Priorität: style.borderColor (React Flow Live-Style) > data.borderColor (Persistierte Daten)
     if (node?.style?.borderColor) return node.style.borderColor;
     if (node?.data?.borderColor) return node.data.borderColor;
     return "var(--default-node-border)";
   };
 
-  // Aktuelle Daten für den ersten Knoten
-  const firstNode = firstNodeData;
-
-  // Color ////////////////////
-  const realNodeColor = firstNode
-    ? getNodeColor(firstNode)
-    : "var(--default-node-border)";
+  const firstNode = selectedNodeIds.length > 0 ? allNodesRef.current?.get(selectedNodeIds[0]) : null;
 
   const [currentColor, setCurrentColor] = useState("");
+  const [localLabel, setLocalLabel] = useState("");
 
-  const allShareSameColor = useMemo(() => {
-    if (selectedNodeIds.length === 0) return true;
-    const firstColor = firstNode
-      ? getNodeColor(firstNode)
-      : "var(--default-node-border)";
-    return selectedNodeIds.every((id) => {
-      const node = allNodesRef.current.get(id);
-      return getNodeColor(node) === firstColor;
-    });
-  }, [selectedNodeIds, firstNodeData]);
-
+  // Der optimierte, abbrechbare Sync-Effekt für Farbe und Text
   useEffect(() => {
     if (!isOpen || selectedNodeIds.length === 0) {
       setCurrentColor("");
+      setLocalLabel("");
       return;
     }
-    setCurrentColor(allShareSameColor ? realNodeColor : "");
-  }, [selectedNodeIds, allShareSameColor, realNodeColor, isOpen]);
 
-  // Label //////////////////////
-  const [localLabel, setLocalLabel] = useState("");
+    const firstNodeFromRef = allNodesRef.current?.get(selectedNodeIds[0]);
+    if (!firstNodeFromRef) return;
 
-  const allShareSameLabel = useMemo(() => {
-    if (selectedNodeIds.length === 0) return true;
-    const firstLabel = firstNode?.data?.label || "";
-    return selectedNodeIds.every((id) => {
-      const node = allNodesRef.current.get(id);
-      return (node?.data?.label || "") === firstLabel;
-    });
-  }, [selectedNodeIds, firstNodeData]);
+    const firstLabel = firstNodeFromRef?.data?.label || "";
+    const firstColor = getNodeColor(firstNodeFromRef);
 
-  useEffect(() => {
-    setLocalLabel(allShareSameLabel ? firstNode?.data?.label || "" : "");
-  }, [selectedNodeIds, allShareSameLabel, firstNode]);
+    let shareColor = true;
+    let shareLabel = true;
 
+    for (let i = 1; i < selectedNodeIds.length; i++) {
+      const node = allNodesRef.current?.get(selectedNodeIds[i]);
+      
+      if (shareLabel && (node?.data?.label || "") !== firstLabel) {
+        shareLabel = false;
+      }
+      if (shareColor && getNodeColor(node) !== firstColor) {
+        shareColor = false;
+      }
+
+      // Performance-Booster: Sobald feststeht, dass nichts matcht -> Schleife sofort abbrechen!
+      if (!shareColor && !shareLabel) break;
+    }
+
+    setCurrentColor(shareColor ? firstColor : "");
+    setLocalLabel(shareLabel ? firstLabel : "");
+  }, [selectedNodeIds, isOpen, nodesVersion]); // nodesVersion sorgt für Live-Updates bei Events
+
+  // Hotkey-Fokus-Handler
   useEffect(() => {
     if (!isOpen) return;
 
     const handleGlobalKeyDown = (e) => {
-      // Ignorieren, wenn der Nutzer bereits in einem Input/Textarea schreibt
-      if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")
-        return;
-
-      // Ignorieren bei Steuerungs-Tasten (Strg, Alt, Meta, Shift einzeln, Escape, Pfeiltasten etc.)
+      if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
       if (e.ctrlKey || e.altKey || e.metaKey || e.key.length > 1) return;
 
       const inputEl = document.getElementById("sidebarRight_Input");
@@ -155,8 +133,6 @@ function SidebarRightComponent({
     window.addEventListener("keydown", handleGlobalKeyDown);
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
   }, [isOpen]);
-
-  // ================================== RETURN =====================================
 
   return (
     <div
@@ -172,13 +148,11 @@ function SidebarRightComponent({
         flex: "1 0 auto",
         padding: isOpen ? "16px" : "0",
         boxSizing: "border-box",
-        transition:
-          "width 0.3s cubic-bezier(0.25, 1, 0.5, 1), padding 0.3s ease",
+        transition: "width 0.3s cubic-bezier(0.25, 1, 0.5, 1), padding 0.3s ease",
         position: "relative",
         overflow: "hidden",
       }}
     >
-      {/* INHALT */}
       <div
         style={{
           opacity: isOpen ? 1 : 0,
@@ -215,25 +189,16 @@ function SidebarRightComponent({
           </p>
         </div>
 
-        {/* 1. EIGENSCHAFT: NAME / LABEL */}
+        {/* EIGENSCHAFT: NAME / LABEL (Auskommentiert, aber voll funktionstüchtig verknüpft) */}
         {/* <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-          <label
-            style={{
-              fontSize: "12px",
-              textTransform: "uppercase",
-              letterSpacing: "0.04em",
-              opacity: 0.8,
-            }}
-          >
+          <label style={{ fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.04em", opacity: 0.8 }}>
             Titel
           </label>
           <input
             id="sidebarRight_Input"
             type="text"
             value={localLabel}
-            placeholder={
-              allShareSameLabel ? "Knotenname eingeben..." : "— Mehrere Werte —"
-            }
+            placeholder={localLabel ? "Knotenname eingeben..." : "— Mehrere Werte —"}
             onFocus={(e) => {
               e.target.style.borderColor = "var(--accent)";
               e.target.select();
@@ -252,9 +217,7 @@ function SidebarRightComponent({
               onUpdateNodes("label", localLabel);
             }}
             onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.target.blur();
-              }
+              if (e.key === "Enter") e.target.blur();
             }}
             style={{
               padding: "10px 12px",
@@ -270,7 +233,7 @@ function SidebarRightComponent({
           />
         </div> */}
 
-        {/* Farben */}
+        {/* FELD: FARBEN */}
         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
           <label
             style={{
@@ -283,7 +246,6 @@ function SidebarRightComponent({
             Farbe
           </label>
 
-          {/* Farb-Quadrate für den schnellen Zugriff */}
           <div
             style={{
               width: "100%",
@@ -302,7 +264,7 @@ function SidebarRightComponent({
                 width: "100%",
                 justifyItems: "stretch",
               }}
-            >
+              >
               {[
                 "var(--default-node-border)",
                 "#f59e0b", // Gelb
@@ -314,7 +276,6 @@ function SidebarRightComponent({
                 "#f97316", // Orange
               ].map((color) => {
                 const isSelected =
-                  allShareSameColor &&
                   currentColor !== "" &&
                   currentColor.toLowerCase() === color.toLowerCase();
                 return (
@@ -366,55 +327,9 @@ function SidebarRightComponent({
         >
           <RouteOff/>Verbindungen auswählen
         </button>
-
-        {/* REIN INFORMATIVE ID-LISTE IM FUSSBEREICH */}
-        {/* <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: "8px",
-            marginTop: "auto",
-          }}
-        >
-          <span
-            style={{
-              fontSize: "12px",
-              textTransform: "uppercase",
-              letterSpacing: "0.04em",
-              opacity: 0.8,
-            }}
-          >
-            Auswahl-IDs
-          </span>
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: "4px",
-              maxHeight: "80px",
-              overflowY: "auto",
-            }}
-          >
-            {selectedNodeIds.map((id) => (
-              <code
-                key={id}
-                style={{
-                  padding: "2px 6px",
-                  background: "var(--bg)",
-                  border: "1px solid var(--border)",
-                  borderRadius: "4px",
-                  fontSize: "10px",
-                  fontFamily: "var(--mono)",
-                }}
-              >
-                {id}
-              </code>
-            ))}
-          </div>
-        </div> */}
       </div>
 
-      {/* MINIMALER IDE-INDIKATOR WENN GESCHLOSSEN */}
+      {/* INDIKATOR WENN GESCHLOSSEN */}
       {!isOpen && (
         <div
           style={{

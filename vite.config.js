@@ -12,11 +12,16 @@ export default defineConfig({
     rollupOptions: {
       output: {
         // Manual Chunking zur Reduzierung der Payload-Größe und besseren Caching
-        manualChunks: {
-          'react-flow': ['@xyflow/react'],
-          'dagre': ['dagre'],
-          'ai-sdk': ['@google/generative-ai'],
-          'icons': ['lucide-react']
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('@xyflow/react')) return 'react-flow';
+            if (id.includes('dagre')) return 'dagre';
+            if (id.includes('@google/generative-ai')) return 'ai-sdk';
+            if (id.includes('lucide-react')) return 'icons';
+            
+            // Alles andere aus node_modules landet in einem allgemeinen 'vendor'-Paket
+            return 'vendor';
+          }
         }
       }
     },
