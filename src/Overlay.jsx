@@ -28,60 +28,47 @@ export default function Overlay({ type, onClose, nodes, mindmapData }) {
     });
   };
 
-  const liveLabels =
-    nodes
-      ?.map((node) => node.data?.label || node.label)
-      .filter(Boolean)
-      .slice(0, 5) || [];
-  const previewNodes =
-    liveLabels.length > 0 ? liveLabels : ["Hauptthema", "Idee A", "Idee B"];
+  // 1. Prüfen, ob 6 oder mehr Knoten existieren
+  const hasMoreThanFive = (nodes || []).length >= 6;
+
+  // 2. Linke Seite: Echte Labels holen (maximal 5)
+  const liveLabels = nodes?.map((node) => node.data?.label || node.label).filter(Boolean).slice(0, 5) || [];
+  const previewNodes = [...liveLabels];
+
+  // Wenn es 6+ Knoten sind, einfach das "..." als letzten Eintrag in das Vorschau-Array pushen
+  if (hasMoreThanFive) {
+    previewNodes.push("...");
+  }
 
   const mapName = mindmapData?.name || "Unbenannte Mindmap";
 
-  const jsonNodesPreview = Array.from({ length: 5 }).map((_, i) => {
-    const realNode = nodes?.[i];
+  // 3. Rechte Seite: Maximal 5 echte Knoten für das JSON-Array mappen
+  const jsonNodesPreview = (nodes || []).slice(0, 5).map((realNode, i) => {
+    const label = realNode.data?.label || realNode.label || `Knoten ${i + 1}`;
+    const nodeObj = { label };
 
-    if (realNode) {
-      const label = realNode.data?.label || realNode.label || `Knoten ${i + 1}`;
+    const color = realNode.data?.borderColor || realNode.borderColor;
+    const status = realNode.data?.status || realNode.status;
+    const id = realNode.id;
 
-      const nodeObj = { label };
-
-      const color = realNode.data?.borderColor || realNode.borderColor;
-      const status = realNode.data?.status || realNode.status;
-      const id = realNode.id;
-
-      if (color) {
-        nodeObj.borderColor = color;
-      } else if (status) {
-        nodeObj.status = status;
-      } else if (id) {
-        nodeObj.id = id;
-      }
-
-      return nodeObj;
-    } else {
-      const mockLabels = [
-        "Hauptthema",
-        "Unterthema",
-        "Idee",
-        "Notiz",
-        "Details",
-      ];
-      const mockFallbacks = [
-        { borderColor: "#aa3bff" },
-        { borderColor: "#c084fc" },
-        { status: "added" },
-        { status: "deleted" },
-        { id: "node_583a" },
-      ];
-
-      return {
-        label: mockLabels[i],
-        ...mockFallbacks[i],
-      };
+    if (color) {
+      nodeObj.borderColor = color;
+    } else if (status) {
+      nodeObj.status = status;
+    } else if (id) {
+      nodeObj.id = id;
     }
+
+    return nodeObj;
   });
-  const jsonPreviewString = JSON.stringify(
+
+  // Wenn es 6+ Knoten sind, schmuggeln wir ein geheimes Platzhalter-Objekt ans Ende des Arrays
+  if (hasMoreThanFive) {
+    jsonNodesPreview.push({ "___LIVEDATA_ELLIPSIS___": true });
+  }
+
+  // Das Objekt in einen formatierten String umwandeln
+  let jsonPreviewString = JSON.stringify(
     {
       name: mapName,
       nodes: jsonNodesPreview,
@@ -89,6 +76,14 @@ export default function Overlay({ type, onClose, nodes, mindmapData }) {
     null,
     2,
   );
+
+  // Wenn es 6+ Knoten sind, ersetzen wir das hässliche Platzhalter-Objekt durch dein schönes { ... }
+  if (hasMoreThanFive) {
+    jsonPreviewString = jsonPreviewString.replace(
+      /\{\s*"___LIVEDATA_ELLIPSIS___":\s*true\s*\}/,
+      "{ ... }"
+    );
+  }
 
   // --- DIE WEICHE FÜR DIE INHALTE ---
   let title = "";
@@ -134,7 +129,7 @@ export default function Overlay({ type, onClose, nodes, mindmapData }) {
                     }}
                   >
                     {txt}
-                    {i < previewNodes.length - 1 ? "," : ""}
+                    {i < previewNodes.length - 1 && txt !== '...' ? ',' : ''}
                   </span>
                 ))}
               </div>

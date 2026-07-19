@@ -2,7 +2,6 @@ import { useRef, useState, useEffect, memo } from "react";
 import { PanelLeftClose, PanelLeftOpen, Settings, Info, Palette, Moon, Sun, RotateCcw, FolderOpen, MoreVertical, PencilLine, Trash2, Plus, CircleQuestionMark, Copy } from "lucide-react";
 import { HexColorPicker } from "react-colorful";
 import TypewriterBox from "./TypeWriterBox";
-import Overlay from "./Overlay";
 
 function MeasuredVirtualList({ items, itemHeight, renderItem }) {
   const containerRef = useRef(null);
@@ -71,8 +70,6 @@ function SidebarLeftComponent({
   dirName,
   onSelectDir,
   maps,
-  nodes,
-  mindmapData,
   currentMap,
   onSelectMap,
   onDeleteMap,
@@ -86,10 +83,10 @@ function SidebarLeftComponent({
   onUserApiKeyChange,
   userPickedAccentColor,
   setUserPickedAccentColor,
-  currentMode
+  currentMode,
+  onCopyMap
 }) {
   const [activeMenu, setActiveMenu] = useState(null);
-  const [showOverlay, setShowOverlay] = useState(null); // 'copy'
   const [editingName, setEditingName] = useState(null);
   const [tempName, setTempName] = useState("");
   const [isOpen, setIsOpen] = useState(true);
@@ -402,7 +399,7 @@ function SidebarLeftComponent({
                         <button
                           title="Mindmap kopieren"
                           onClick={() => {
-                            setShowOverlay('copy');
+                            onCopyMap(map.id);
 
                             setActiveMenu(null);
                           }}
@@ -732,12 +729,6 @@ function SidebarLeftComponent({
           auf die Dateien zuzugreifen. Klicke oben auf den gelben Button!
         </div>
       ) : null}
-      <Overlay 
-        type={showOverlay} 
-        onClose={() => setShowOverlay(null)} 
-        nodes={nodes}
-        mindmapData={mindmapData}
-      />
     </div>
   );
 }

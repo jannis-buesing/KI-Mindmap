@@ -5,6 +5,7 @@ import { MindmapBoard } from './MindmapBoard';
 import { Eingabeleiste } from './Eingabeleiste';
 import { SidebarLeft } from './SidebarLeft';
 import { SidebarRight } from './SidebarRight';
+import Overlay from './Overlay';
 import { 
   selectMindmapDirectory, 
   saveMindmapToFile, 
@@ -92,6 +93,8 @@ function App() {
     return savedColors ? JSON.parse(savedColors) : { light: '#aa3bff', dark: '#c084fc' };
   });
   const [confirmDelete, setConfirmDelete] = useState(true);
+  const [showOverlay, setShowOverlay] = useState(null); // 'copy'
+  const [copyMapData, setCopyMapData] = useState(null);
   const [isEdgeSelectMode, setIsEdgeSelectMode] = useState(false);
   const labelDebounceRef = useRef(null);
   
@@ -282,6 +285,39 @@ const handleDeleteMap = useCallback(async (id) => {
     } catch (error) { console.error("Fehler beim Umbenennen der Mindmap:", error); } 
     finally { isRenamingRef.current = false; }
   }, [dirHandle, mapsList, mindmapData]);
+
+  const handleCopyMap = useCallback(async (id) => {
+    if (!dirHandle || !hasPermission) return;
+    
+    // Fall 1: Es ist die aktuell geöffnete Mindmap -> Direkt den Live-State nehmen
+    if (mindmapData && mindmapData.id === id) {
+      setCopyMapData(mindmapData);
+      setShowOverlay('copy');
+      return;
+    }
+    
+    // Fall 2: Es ist eine andere Mindmap -> Daten asynchron aus der JSON-Datei lesen
+    const foundMap = mapsList.find(m => m.id === id);
+    if (!foundMap) return;
+    
+    try {
+      const fileHandle = await dirHandle.getFileHandle(`${foundMap.name}.json`);
+      const file = await fileHandle.getFile();
+      const text = await file.text();
+      let parsedData = JSON.parse(text);
+      
+      // Falls es sich um ein altes Baumstruktur-Format handelt, migrieren
+      if (parsedData.rootNode || !parsedData.nodes) {
+        parsedData = migrateTreeToFlat(parsedData);
+      }
+      
+      setCopyMapData(parsedData);
+      setShowOverlay('copy');
+    } catch (error) {
+      console.error("Fehler beim Laden der Mindmap-Daten für das Clipboard:", error);
+      alert("Die Daten dieser Mindmap konnten nicht geladen werden.");
+    }
+  }, [dirHandle, hasPermission, mapsList, mindmapData]);
 
   async function expandMindmap(userInput, onFailure) {
     if (!mindmapData?.name) { alert("Bitte wähle oder erstelle zuerst eine Mindmap in der linken Leiste!"); return; }
@@ -527,8 +563,6 @@ const handleDeleteMap = useCallback(async (id) => {
         dirName={dirHandle?.name}
         onSelectDir={handleSelectDirectory}
         maps={mapsList}
-        nodes={mindmapData?.nodes || []}
-        mindmapData={mindmapData}
         currentMap={mindmapData?.id || ''}
         onSelectMap={handleSelectMap}
         onDeleteMap={handleDeleteMap}
@@ -543,6 +577,7 @@ const handleDeleteMap = useCallback(async (id) => {
         userPickedAccentColor={userPickedAccentColor}
         setUserPickedAccentColor={setUserPickedAccentColor}
         currentMode={isDark ? 'dark' : 'light'}
+        onCopyMap={handleCopyMap}
       />
       <div style={{ flex: '1 1 20%', minWidth: '240px', padding: '30px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -582,6 +617,16 @@ const handleDeleteMap = useCallback(async (id) => {
         onUpdateNodes={handleUpdateSelectedNodes}
         isEdgeSelectMode={isEdgeSelectMode}
         setIsEdgeSelectMode={setIsEdgeSelectMode}
+      />
+
+      <Overlay 
+        type={showOverlay} 
+        onClose={() => {
+          setShowOverlay(null);
+          setCopyMapData(null);
+        }} 
+        nodes={copyMapData?.nodes || []}
+        mindmapData={copyMapData}
       />
     </div>
   );
