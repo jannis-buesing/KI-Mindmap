@@ -319,6 +319,10 @@ const handleDeleteMap = useCallback(async (id) => {
     }
   }, [dirHandle, hasPermission, mapsList, mindmapData]);
 
+  const setOverlayAPIKeyTutorial = useCallback(async (id) => {
+    setShowOverlay('apiKeyTutorial');
+  }, []);
+
   async function expandMindmap(userInput, onFailure) {
     if (!mindmapData?.name) { alert("Bitte wähle oder erstelle zuerst eine Mindmap in der linken Leiste!"); return; }
     const targetMapId = mindmapData.id;
@@ -578,6 +582,8 @@ const handleDeleteMap = useCallback(async (id) => {
         setUserPickedAccentColor={setUserPickedAccentColor}
         currentMode={isDark ? 'dark' : 'light'}
         onCopyMap={handleCopyMap}
+        setOverlayAPIKeyTutorial={setOverlayAPIKeyTutorial}
+        isOverlayOpen={!!showOverlay}
       />
       <div style={{ flex: '1 1 20%', minWidth: '240px', padding: '30px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

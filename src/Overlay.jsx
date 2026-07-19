@@ -42,10 +42,20 @@ export default function Overlay({ type, onClose, nodes, mindmapData }) {
 
   const mapName = mindmapData?.name || "Unbenannte Mindmap";
 
-  // 3. Rechte Seite: Maximal 5 echte Knoten für das JSON-Array mappen
   const jsonNodesPreview = (nodes || []).slice(0, 5).map((realNode, i) => {
-    const label = realNode.data?.label || realNode.label || `Knoten ${i + 1}`;
-    const nodeObj = { label };
+    const rawLabel = realNode.data?.label || realNode.label || `Knoten ${i + 1}`;
+    
+    // 1. Alle Zeilenumbrüche (\r und \n) durch ein einfaches Leerzeichen ersetzen
+    const singleLineLabel = rawLabel.replace(/[\r\n]+/g, ' ').trim();
+    
+    // 2. Text auf eine saubere Maximallänge begrenzen (z. B. 20 Zeichen)
+    const maxChars = 20;
+    const truncatedLabel = singleLineLabel.length > maxChars 
+      ? singleLineLabel.slice(0, maxChars) + '...' 
+      : singleLineLabel;
+
+    // Das bereinigte Label in das Objekt setzen
+    const nodeObj = { label: truncatedLabel };
 
     const color = realNode.data?.borderColor || realNode.borderColor;
     const status = realNode.data?.status || realNode.status;
@@ -119,6 +129,7 @@ export default function Overlay({ type, onClose, nodes, mindmapData }) {
                 {previewNodes.map((txt, i) => (
                   <span
                     key={i}
+                    title={txt}
                     style={{
                       background: "var(--border)",
                       color: "var(--text-h)",
@@ -126,9 +137,21 @@ export default function Overlay({ type, onClose, nodes, mindmapData }) {
                       borderRadius: "4px",
                       fontSize: "11px",
                       fontWeight: "500",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      maxWidth: "120px",
                     }}
                   >
-                    {txt}
+                    <span
+                      style={{
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {txt}
+                    </span>
+                    
                     {i < previewNodes.length - 1 && txt !== '...' ? ',' : ''}
                   </span>
                 ))}
@@ -178,13 +201,87 @@ export default function Overlay({ type, onClose, nodes, mindmapData }) {
       break;
 
     // ===================================== GEMINI API-KEY TUTORIAL ===========================================
-    case "settings":
-      title = "Einstellungen";
+    case "apiKeyTutorial":
+      title = "API-Schlüssel erstellen";
       content = (
-        <div style={{ marginTop: "16px", textAlign: "left" }}>
-          <p style={{ color: "var(--text)" }}>
-            Hier können später deine App-Einstellungen stehen.
+        <div style={{ marginTop: "16px", textAlign: "left", maxWidth: "600px", width: "100%" }}>
+          <p style={{ color: "var(--text-h)", marginBottom: "16px", fontSize: "13px", opacity: 0.8, display: 'flex', justifyContent: 'center' }}>
+            Folge dieser Kurzanleitung, um deinen kostenlosen Gemini API-Key zu generieren:
           </p>
+
+          <div
+            style={{
+              display: "flex",
+              gap: "16px",
+              width: "100%",
+            }}
+          >
+           {/* Linke Spalte: Schritt 1 & 3 */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "24px", flex: 1 }}>
+          {/* Schritt 1 */}
+          <div className="elegant-card" style={{ cursor: "default" }}>
+            <div className="preview-box" style={{ height: "40px", justifyContent: "flex-start", padding: "12px" }}>
+              <span style={{ background: "var(--border)", color: "var(--text-h)", padding: "0px 8px", borderRadius: "4px", fontSize: "11px", fontWeight: "600" }}>
+                Schritt 1
+              </span>
+            </div>
+            <div className="card-content">
+              <h4 className="card-title">Google AI Studio öffnen</h4>
+              <p className="card-desc">
+                  Gehe auf die Website <a href="https://aistudio.google.com" target="_blank" rel="noreferrer" style={{ color: "var(--accent)", textDecoration: "underline" }}>aistudio.google.com</a> und melde dich mit deinem Google-Konto an.
+              </p>
+            </div>
+          </div>
+
+          {/* Schritt 3 */}
+          <div className="elegant-card" style={{ cursor: "default" }}>
+            <div className="preview-box" style={{ height: "40px", justifyContent: "flex-start", padding: "0 12px" }}>
+              <span style={{ background: "var(--border)", color: "var(--text-h)", padding: "0px 8px", borderRadius: "4px", fontSize: "11px", fontWeight: "600" }}>
+                Schritt 3
+              </span>
+            </div>
+            <div className="card-content">
+              <h4 className="card-title">Schlüssel generieren</h4>
+              <p className="card-desc">
+                  Benenne deinen Schlüssel und erstelle ein neues Projekt unter <em>Importiertes Projekt auswählen</em>.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Rechte Spalte: Schritt 2 & 4 (Rutschen durch das marginTop geschlossen nach unten) */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "24px", flex: 1, marginTop: "48px" }}>
+          {/* Schritt 2 */}
+          <div className="elegant-card" style={{ cursor: "default" }}>
+            <div className="preview-box" style={{ height: "40px", justifyContent: "flex-start", padding: "0 12px" }}>
+              <span style={{ background: "var(--border)", color: "var(--text-h)", padding: "0px 8px", borderRadius: "4px", fontSize: "11px", fontWeight: "600" }}>
+                Schritt 2
+              </span>
+            </div>
+            <div className="card-content">
+              <h4 className="card-title">Menü aufrufen</h4>
+              <p className="card-desc">
+                  Klicke ganz oben rechts in der Ecke auf den Button <strong>"API-Schlüssel erstellen"</strong>.
+              </p>
+            </div>
+          </div>
+
+          {/* Schritt 4 */}
+          <div className="elegant-card" style={{ cursor: "default" }}>
+            <div className="preview-box" style={{ height: "40px", justifyContent: "flex-start", padding: "0 12px" }}>
+              <span style={{ background: "var(--border)", color: "var(--text-h)", padding: "0px 8px", borderRadius: "4px", fontSize: "11px", fontWeight: "600" }}>
+                Schritt 4
+              </span>
+            </div>
+            <div className="card-content">
+              <h4 className="card-title">Kopieren &amp; Sichern</h4>
+              <p className="card-desc">
+                  Kopiere den Schlüssel und füge ihn hier ein.
+              </p>
+            </div>
+          </div>
+        </div>
+          </div>
         </div>
       );
       break;

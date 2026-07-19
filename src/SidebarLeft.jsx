@@ -84,7 +84,9 @@ function SidebarLeftComponent({
   userPickedAccentColor,
   setUserPickedAccentColor,
   currentMode,
-  onCopyMap
+  onCopyMap,
+  setOverlayAPIKeyTutorial,
+  isOverlayOpen,
 }) {
   const [activeMenu, setActiveMenu] = useState(null);
   const [editingName, setEditingName] = useState(null);
@@ -118,10 +120,10 @@ function SidebarLeftComponent({
   };
 
   useEffect(() => {
-    if (activePopup && activePopupRef.current) {
+    if (!isOverlayOpen && activePopup && activePopupRef.current) {
       activePopupRef.current.focus();
     }
-  }, [activePopup]);
+  }, [activePopup, isOverlayOpen]);
 
   const handleColorChange = (newHexColor) => {
     setUserPickedAccentColor(prev => ({
@@ -462,7 +464,8 @@ function SidebarLeftComponent({
                   if (
                     e.relatedTarget?.id === "btn_sbl_info" || 
                     e.relatedTarget?.id === "btn_sbl_settings" ||
-                    e.relatedTarget?.id === "btn_sbl_palette"
+                    e.relatedTarget?.id === "btn_sbl_palette" ||
+                    isOverlayOpen
                   ) {
                     return; 
                   }
@@ -638,15 +641,16 @@ function SidebarLeftComponent({
                         >
                           <span style={{ fontWeight: '600', color: 'var(--text-h)' }}>Gemini API-Key:</span>
                           <CircleQuestionMark
-                          onMouseEnter={() => setCircleQuestionMarkIsHovered(true)}
-                          onMouseLeave={() => setCircleQuestionMarkIsHovered(false)}
-                          style={{ 
-                            cursor: 'pointer', 
-                            color: circleQuestionMarkIsHovered ? 'var(--text-h)' : 'var(--text)', 
-                            width: '16px', 
-                            height: '16px',
-                            transition: 'color 0.2s'
-                          }}
+                            onMouseEnter={() => setCircleQuestionMarkIsHovered(true)}
+                            onMouseLeave={() => setCircleQuestionMarkIsHovered(false)}
+                            onClick={setOverlayAPIKeyTutorial}
+                            style={{ 
+                              cursor: 'pointer', 
+                              color: circleQuestionMarkIsHovered ? 'var(--text-h)' : 'var(--text)', 
+                              width: '16px', 
+                              height: '16px',
+                              transition: 'color 0.2s'
+                            }}
                           />
                         </div>
                         <input 
