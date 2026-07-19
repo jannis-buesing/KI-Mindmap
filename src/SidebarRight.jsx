@@ -8,7 +8,8 @@ function SidebarRightComponent({
   setIsEdgeSelectMode,
 }) {
   const isOpen = selectedNodeIds.length > 0 && !isEdgeSelectMode;
-  const [isHovered, setIsHovered] = useState(false);
+  const [SBRisHovered, setSBRisHovered] = useState(false);
+  const [verbindungenAuswählenIsHovered, setVerbindungenAuswählenIsHovered] = useState(false);
 
   const [nodesVersion, setNodesVersion] = useState(0);
 
@@ -136,8 +137,8 @@ function SidebarRightComponent({
 
   return (
     <div
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      onMouseEnter={() => setSBRisHovered(true)}
+      onMouseLeave={() => setSBRisHovered(false)}
       style={{
         width: isOpen ? "200px" : "20px",
         maxWidth: isOpen ? "200px" : "20px",
@@ -278,11 +279,13 @@ function SidebarRightComponent({
                 const isSelected =
                   currentColor !== "" &&
                   currentColor.toLowerCase() === color.toLowerCase();
+                const showDefaultTitle = color === "var(--default-node-border)" ? "Standardfarbe" : '';
                 return (
                   <button
                     className="sideBarRight_colorButton"
                     key={color}
-                    title={color}
+                    // title={color}
+                    title={showDefaultTitle}
                     onClick={() => onUpdateNodes("borderColor", color)}
                     style={{
                       width: "100%",
@@ -307,25 +310,33 @@ function SidebarRightComponent({
         {/* Button EdgeSelection */}
         <button
           onClick={() => setIsEdgeSelectMode(!isEdgeSelectMode)}
+          onMouseEnter={() => setVerbindungenAuswählenIsHovered(true)}
+          onMouseLeave={() => setVerbindungenAuswählenIsHovered(false)}
+          title="Verbindungen durch Markieren der dazugehörigen Knoten auswählen"
           style={{
             width: '100%',
             padding: '10px',
-            marginTop: 'auto',
             borderRadius: '8px',
-            border: '1px solid',
-            borderColor: isEdgeSelectMode ? '#f37f7f' : '#cbd5e1',
-            backgroundColor: isEdgeSelectMode ? '#fef2f2' : '#ffffff',
-            color: isEdgeSelectMode ? '#f37f7f' : '#334155',
             fontWeight: '600',
             cursor: 'pointer',
-            transition: 'all 0.2s ease',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: '4px'
+            gap: '6px',
+            border: '1px solid',
+            transition: 'background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease',
+            borderColor: isEdgeSelectMode ? 'var(--edgeDelete)' : 'var(--border)',
+            color: isEdgeSelectMode ? 'var(--edgeDelete)' : 'var(--text)',
+            backgroundColor: isEdgeSelectMode
+              ? (verbindungenAuswählenIsHovered 
+                  ? 'color-mix(in srgb, var(--edgeDelete) 20%, transparent)' 
+                  : 'color-mix(in srgb, var(--edgeDelete) 10%, transparent)')
+              : (verbindungenAuswählenIsHovered 
+                  ? 'color-mix(in srgb, var(--text) 8%, transparent)' 
+                  : 'transparent')
           }}
         >
-          <RouteOff/>Verbindungen auswählen
+          <RouteOff color="var(--edgeDelete)" />Verbindungen auswählen
         </button>
       </div>
 
@@ -339,9 +350,9 @@ function SidebarRightComponent({
             left: "50%",
             transform: "translateX(-50%)",
             width: "2px",
-            background: isHovered ? "var(--accent)" : "var(--border)",
+            background: SBRisHovered ? "var(--accent)" : "var(--border)",
             borderRadius: "2px",
-            opacity: isHovered ? 1 : 0.6,
+            opacity: SBRisHovered ? 1 : 0.6,
             transition: "background 0.2s ease, opacity 0.2s ease",
             pointerEvents: "none",
           }}

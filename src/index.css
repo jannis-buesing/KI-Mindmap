@@ -8,6 +8,7 @@
   --accent-bg: rgba(170, 59, 255, 0.1);
   --accent-border: rgba(170, 59, 255, 0.5);
   --default-node-border: #9c9c9c;
+  --edgeDelete: #e47f7f;
 
   --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
   --mono: ui-monospace, Consolas, monospace;
@@ -448,12 +449,16 @@ code {
 
 /* 3. Zustand, wenn die Linie aktiv ausgewählt/angeklickt wurde */
 .react-flow__edge.selected .react-flow__edge-path {
-  stroke-width: 5 !important;
+  stroke-width: 4 !important;
   stroke: var(--edgeDelete) !important;
 }
 
 .hide-node-selection .editable-mindmap-node {
   border-color: var(--node-default-border) !important;
+}
+
+.react-flow__edge.selected:hover .react-flow__edge-path {
+  stroke-width: 5 !important;
 }
 
 /* ======================= Edges Ende ======================= */

@@ -93,12 +93,12 @@ function SidebarLeftComponent({
   const [activePopup, setActivePopup] = useState(null); // 'info' | 'settings' | null
   const activePopupRef = useRef(null);
   const Hinweissätze = [
-    "Markierte Boxen und Verbindungen per Entf / Backspace löschen.",
-    "Ziehe die rechte Kante einer Box, um die Breite einzustellen.",
-    "Verbinde zwei Boxen durch Ziehen von Kreis zu Kreis.",
+    "Markierte Knoten und Verbindungen per Entf / Backspace löschen.",
+    "Ziehe die rechte Kante eines Knotens, um die Breite einzustellen.",
+    "Verbinde zwei Knoten durch Ziehen von Kreis zu Kreis.",
     "Alle deine Änderungen werden lokal gespeichert.",
     "Passe die Akzentfarbe nach Deiner Vorliebe an.",
-    "Doppelklicke auf den freien Hintergrund, um eine neue Box zu erstellen."
+    "Doppelklicke auf den freien Hintergrund, um einen neuen Knoten zu erstellen."
   ];
   const [HinweissätzeStartIndex, setHinweissätzeStartIndex] = useState(0);
   const [circleQuestionMarkIsHovered, setCircleQuestionMarkIsHovered] = useState(false);

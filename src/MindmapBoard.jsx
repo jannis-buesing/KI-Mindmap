@@ -231,7 +231,7 @@ function EditableMindmapNodeComponent({ id, data, isConnectable, selected }) {
           </button>
         </div>
       )}
-      <Handle type="target" position={Position.Top} isConnectable={isConnectable} style={{ opacity: 1, top: '-2px', background: 'var(--border)', width: '6px', height: '6px' }} />
+      <Handle type="target" position={Position.Top} isConnectable={isConnectable} style={{ opacity: 1, top: '-2px', background: 'var(--border)', border: '1px solid var(--text-h)', width: '6px', height: '6px' }} />
       <div className="node-content-wrapper">
         {data.status === 'updated' && data.oldLabel && (
           <div style={{ fontSize: '10px', textDecoration: 'line-through', opacity: 0.5, marginBottom: '2px' }}>{data.oldLabel}</div>
@@ -243,7 +243,7 @@ function EditableMindmapNodeComponent({ id, data, isConnectable, selected }) {
         )}
       </div>
       <div ref={resizeHandleRef} onMouseDown={startResizing} className="nodrag node-resize-handle" />
-      <Handle type="source" position={Position.Bottom} isConnectable={isConnectable} style={{ opacity: 1, bottom: '-2px', background: 'var(--border)', width: '6px', height: '6px' }} />
+      <Handle type="source" position={Position.Bottom} isConnectable={isConnectable} style={{ opacity: 1, bottom: '-2px', background: 'var(--border)', border: '1px solid var(--text-h)', width: '6px', height: '6px' }} />
     </div>
   );
 }
