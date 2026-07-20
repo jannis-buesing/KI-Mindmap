@@ -270,11 +270,10 @@ export const EditableMindmapNode = React.memo(EditableMindmapNodeComponent, (pre
 
 EditableMindmapNode.displayName = 'EditableMindmapNode';
 
-export function MindmapBoardContent({ rawData, setMindmapData, currentFileName, positions, onNodesSelect, selectedNodeIds = [], isEdgeSelectMode, setIsEdgeSelectMode }) {
+export function MindmapBoardContent({ rawData, setMindmapData, currentFileName, positions, onNodesSelect, selectedNodeIds = [], isEdgeSelectMode, setIsEdgeSelectMode, isViewReady, setIsViewReady }) {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const { getNodes, screenToFlowPosition, fitView } = useReactFlow();
-  const [isViewReady, setIsViewReady] = useState(false);
 
   const nodesRef = useRef(nodes);
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
@@ -293,22 +292,35 @@ export function MindmapBoardContent({ rawData, setMindmapData, currentFileName, 
   }, [isEdgeSelectMode, setNodes]);
 
   useEffect(() => {
-    const triggerFit = async () => {
-      setIsViewReady(false);
+    const triggerFit = () => {
+      
+        console.log("triggerfit");
 
-      await fitView({ padding: 5, duration: 0 });
 
-      setIsViewReady(true);
+      const ausführenTriggerFit = async () => {
+        
+        
+        console.log("vorm await fitview");
 
-      fitView({ 
-        padding: 1,
-        duration: 2000
+        await fitView({ padding: 5, duration: 0 });
+
+        console.log("vorm setisviewready");
+
+        setIsViewReady(true);
+
+        fitView({ 
+          padding: 1,
+          duration: 2000
+        });
+      };
+      requestAnimationFrame(() => {
+        ausführenTriggerFit();
       });
     };
 
     window.addEventListener('reactflow-trigger-fitview', triggerFit);
     return () => window.removeEventListener('reactflow-trigger-fitview', triggerFit);
-  }, [fitView]);
+  }, [fitView, setIsViewReady]);
 
   const positionsRef = useRef(positions);
   useEffect(() => { positionsRef.current = positions; }, [positions]);
@@ -811,6 +823,8 @@ export const MindmapBoard = React.memo(function MindmapBoard(props){
   if (prevProps.onNodesSelect !== nextProps.onNodesSelect) return false;
   if (prevProps.isEdgeSelectMode !== nextProps.isEdgeSelectMode) return false;
   if (prevProps.setIsEdgeSelectMode !== nextProps.setIsEdgeSelectMode) return false;
+  if (prevProps.isViewReady !== nextProps.isViewReady) return false;
+  if (prevProps.rawData !== nextProps.rawData) return false;
   
   const pSel = prevProps.selectedNodeIds || [];
   const nSel = nextProps.selectedNodeIds || [];

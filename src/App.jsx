@@ -97,6 +97,7 @@ function App() {
   const [copyMapData, setCopyMapData] = useState(null);
   const [isEdgeSelectMode, setIsEdgeSelectMode] = useState(false);
   const labelDebounceRef = useRef(null);
+  const [isViewReady, setIsViewReady] = useState(true);
   
   // Akzentfarbe ändern
   const [isDark, setIsDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -187,6 +188,9 @@ function App() {
 
   const handleCreateMap = useCallback(async () => {
     if (!dirHandle) return;
+
+    setIsViewReady(false);
+
     const uniqueId = `${Date.now()}_${Math.floor(Math.random() * 1000)}`;
     const defaultName = 'Neue Mindmap';
     const initialData = {
@@ -612,14 +616,16 @@ const handleDeleteMap = useCallback(async (id) => {
             justCreatedNodeId={justCreatedNodeId}
             isEdgeSelectMode={isEdgeSelectMode}
             setIsEdgeSelectMode={setIsEdgeSelectMode}
+            isViewReady={isViewReady}
+            setIsViewReady={setIsViewReady}
           />
         ) : (
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--code-bg)', borderRadius: '12px', border: '1px dashed var(--border)', marginTop: '20px' }}>
             {dirHandle && hasPermission
               ? 'Wähle links eine Mindmap aus oder erstelle eine neue.'
               : !hasPermission && dirHandle
-                ? 'Klicke links auf "Berechtigung erteilen", um deine Mindmaps zu laden.'
-                : 'Verbinde zuerst einen Ordner auf deinem PC, um loszulegen!'}
+                ? 'Erteile die Berechtigung, um deine Mindmaps zu laden.'
+                : 'Wähle einen Ordner zum Speichern der Mindmaps aus.'}
           </div>
         )}
         <Eingabeleiste
