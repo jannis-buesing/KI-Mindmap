@@ -211,6 +211,10 @@ function App() {
     const fileInfo = files.find(f => f.id === uniqueId);
     setMindmapData({ ...initialData, _currentFileName: fileInfo?.name || defaultName });
     setIsSaved(true);
+
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('reactflow-trigger-fitview'));
+    }, 100);
   }, [dirHandle]);
 
   const handleSelectMap = useCallback(async (id) => {

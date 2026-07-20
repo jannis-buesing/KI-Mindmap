@@ -273,7 +273,8 @@ EditableMindmapNode.displayName = 'EditableMindmapNode';
 export function MindmapBoardContent({ rawData, setMindmapData, currentFileName, positions, onNodesSelect, selectedNodeIds = [], isEdgeSelectMode, setIsEdgeSelectMode }) {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-  const { getNodes, screenToFlowPosition } = useReactFlow();
+  const { getNodes, screenToFlowPosition, fitView } = useReactFlow();
+  const [isViewReady, setIsViewReady] = useState(false);
 
   const nodesRef = useRef(nodes);
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
@@ -286,10 +287,28 @@ export function MindmapBoardContent({ rawData, setMindmapData, currentFileName, 
   }), []);
 
   useEffect(() => {
-  if (isEdgeSelectMode) {
-    setNodes((nds) => nds.map((node) => ({ ...node, selected: false })));
-  }
-}, [isEdgeSelectMode, setNodes]);
+    if (isEdgeSelectMode) {
+      setNodes((nds) => nds.map((node) => ({ ...node, selected: false })));
+    }
+  }, [isEdgeSelectMode, setNodes]);
+
+  useEffect(() => {
+    const triggerFit = async () => {
+      setIsViewReady(false);
+
+      await fitView({ padding: 5, duration: 0 });
+
+      setIsViewReady(true);
+
+      fitView({ 
+        padding: 1,
+        duration: 2000
+      });
+    };
+
+    window.addEventListener('reactflow-trigger-fitview', triggerFit);
+    return () => window.removeEventListener('reactflow-trigger-fitview', triggerFit);
+  }, [fitView]);
 
   const positionsRef = useRef(positions);
   useEffect(() => { positionsRef.current = positions; }, [positions]);
@@ -684,7 +703,8 @@ export function MindmapBoardContent({ rawData, setMindmapData, currentFileName, 
   // ==================================================== RETURN =========================================================
 
   return (
-    <div onDoubleClick={(event) => {
+    <div
+      onDoubleClick={(event) => {
         event.preventDefault();
         if (event.target.classList.contains('react-flow__pane')) {
           const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
@@ -699,7 +719,17 @@ export function MindmapBoardContent({ rawData, setMindmapData, currentFileName, 
           window.dispatchEvent(new CustomEvent('reactflow-node-create', { detail: { position: snappedPos, parentId: null } }));
         }
       }}
-      style={{ width: '100%', height: '100%', outline: isEdgeSelectMode ? '1px solid var(--edgeDelete)' : '1px solid var(--border)', borderRadius: '12px', overflow: 'hidden', userSelect: 'none', display: 'flex' }}
+      style={{ 
+        width: '100%', 
+        height: '100%', 
+        outline: isEdgeSelectMode ? '1px solid var(--edgeDelete)' : '1px solid var(--border)', 
+        borderRadius: '12px', 
+        overflow: 'hidden', 
+        userSelect: 'none', 
+        display: 'flex',
+        opacity: isViewReady ? 1 : 0,
+        transition: 'opacity 0.2s ease-in-out'
+      }}
     >
       <div style={{ flex: 1, height: '100%', position: 'relative' }}>
         <ReactFlow
