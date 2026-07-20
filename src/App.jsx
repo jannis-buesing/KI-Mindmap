@@ -90,7 +90,7 @@ function App() {
   });
   const [userPickedAccentColor, setUserPickedAccentColor] = useState(() => {
     const savedColors = localStorage.getItem('user_picked_accent_colors');
-    return savedColors ? JSON.parse(savedColors) : { light: '#aa3bff', dark: '#c084fc' };
+    return savedColors ? JSON.parse(savedColors) : { light: '#b385d8', dark: '#c084fc' };
   });
   const [confirmDelete, setConfirmDelete] = useState(true);
   const [showOverlay, setShowOverlay] = useState(null); // 'copy'
@@ -98,7 +98,6 @@ function App() {
   const [isEdgeSelectMode, setIsEdgeSelectMode] = useState(false);
   const labelDebounceRef = useRef(null);
   
-
   // Akzentfarbe ändern
   const [isDark, setIsDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches);
 
@@ -115,6 +114,9 @@ function App() {
 
   useEffect(() => {
     const currentMode = isDark ? 'dark' : 'light';
+
+    document.documentElement.setAttribute('data-theme', currentMode);
+
     const activeColor = userPickedAccentColor[currentMode];
     document.documentElement.style.setProperty('--accent', activeColor);
     const hexToRgb = (hex) => {
@@ -265,25 +267,28 @@ const handleDeleteMap = useCallback(async (id) => {
 
   const handleRenameMap = useCallback(async (id, newName) => {
     if (!newName) return;
+    const sanitizedNewName = newName.replace(/[\/?<>\\:*|"]/g, '').trim();
+    if (!sanitizedNewName) return;
+
     const foundMap = mapsList.find(m => m.id === id);
-    if (!foundMap || foundMap.name === newName) return;
+    if (!foundMap || foundMap.name === sanitizedNewName) return;
+
     try {
       isRenamingRef.current = true;
       const fileHandle = await dirHandle.getFileHandle(`${foundMap.name}.json`);
       const file = await fileHandle.getFile();
       const text = await file.text();
       const data = JSON.parse(text);
-      const updatedData = { ...data, name: newName };
-      await saveMindmapToFile(dirHandle, newName, updatedData, true);
+      const updatedData = { ...data, name: sanitizedNewName };
+      await saveMindmapToFile(dirHandle, sanitizedNewName, updatedData, true);
       await deleteMindmapFile(dirHandle, foundMap.name);
       const files = await loadMindmapsFromDirectory(dirHandle);
       setMapsList(files);
       if (mindmapData?.id === id) {
         const updatedFileInfo = files.find(f => f.id === id);
-        setMindmapData({ ...updatedData, _currentFileName: updatedFileInfo?.name || newName });
+        setMindmapData({ ...updatedData, _currentFileName: updatedFileInfo?.name || sanitizedNewName });
       }
-    } catch (error) { console.error("Fehler beim Umbenennen der Mindmap:", error); } 
-    finally { isRenamingRef.current = false; }
+    } catch (error) { console.error("Fehler beim Umbenennen der Mindmap:", error); }
   }, [dirHandle, mapsList, mindmapData]);
 
   const handleCopyMap = useCallback(async (id) => {
@@ -318,6 +323,8 @@ const handleDeleteMap = useCallback(async (id) => {
       alert("Die Daten dieser Mindmap konnten nicht geladen werden.");
     }
   }, [dirHandle, hasPermission, mapsList, mindmapData]);
+
+  const handleToggleMode = () => setIsDark(prev => !prev);
 
   const setOverlayAPIKeyTutorial = useCallback(async (id) => {
     setShowOverlay('apiKeyTutorial');
@@ -581,13 +588,14 @@ const handleDeleteMap = useCallback(async (id) => {
         userPickedAccentColor={userPickedAccentColor}
         setUserPickedAccentColor={setUserPickedAccentColor}
         currentMode={isDark ? 'dark' : 'light'}
+        onToggleMode={handleToggleMode}
         onCopyMap={handleCopyMap}
         setOverlayAPIKeyTutorial={setOverlayAPIKeyTutorial}
         isOverlayOpen={!!showOverlay}
       />
       <div style={{ flex: '1 1 20%', minWidth: '240px', padding: '30px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>{!mindmapData?.name && <h1>KI Mindmap Studio</h1>}</div>
+          <div>{!mindmapData?.name && <h1>KI Mindmap</h1>}</div>
         </header>
         {mindmapData ? (
           <MindmapBoard 

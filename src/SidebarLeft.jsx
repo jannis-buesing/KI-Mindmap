@@ -84,6 +84,7 @@ function SidebarLeftComponent({
   userPickedAccentColor,
   setUserPickedAccentColor,
   currentMode,
+  onToggleMode,
   onCopyMap,
   setOverlayAPIKeyTutorial,
   isOverlayOpen,
@@ -108,12 +109,14 @@ function SidebarLeftComponent({
   const activeMapObject = maps.find((m) => m.id === currentMap);
 
   const CurrentMapDate = activeMapObject?.date
-    ? new Date(activeMapObject.date).toLocaleDateString("de-DE", {
+    ? new Date(activeMapObject.date).toLocaleString("de-DE", {
         day: "2-digit",
         month: "2-digit",
         year: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
       })
-    : "--.--.--";
+    : "--.--.--, --:--";
 
   const handleButtonClick = (type) => {
     setActivePopup(activePopup === type ? null : type);
@@ -131,6 +134,8 @@ function SidebarLeftComponent({
       [currentMode]: newHexColor
     }));
   };
+
+  const btn_ordnerWechselnBigId = dirName ? 'btn_ordnerWechselnBigNoHasPermission' : 'btn_ordnerWechselnBigNoDirName';
 
   // =================================================================== RETURN ============================================
   return (
@@ -153,6 +158,7 @@ function SidebarLeftComponent({
         style={{
           display: "flex",
           justifyContent: "space-between",
+          marginBottom: isOpen ? '16px' : '8px'
         }}
       >
         {isOpen && <h2>Mindmaps</h2>}
@@ -166,26 +172,10 @@ function SidebarLeftComponent({
         </button>
       </div>
 
-      {/* Ordner-Status & Auswahl Start */}
-      <div
-        style={{
-          fontSize: "13px",
-          margin: isOpen ? "10px 0 20px" : '10px 0 8px',
-          color: "var(--text)",
-          gap: '8px'
-        }}
-      >
-        {isOpen && (
-          <div>
-            <strong>Pfad:</strong>{" "}
-            {dirName ? `📁 ${dirName}` : "Kein Ordner gewählt"}
-          </div>
-        )}
-
         {/* DYNAMISCHER BUTTON: Wechselt den Text je nach Zustand */}
-        { isOpen && (
+        { isOpen && (!dirName || !hasPermission) && (
           <button
-            id="btn_ordnerWechselnBig"
+            id={btn_ordnerWechselnBigId}
             onClick={onSelectDir}
             style={{
               display: "block",
@@ -194,32 +184,18 @@ function SidebarLeftComponent({
               height: "auto",
               padding: "8px",
               cursor: "pointer",
-              backgroundColor:
-                !hasPermission && dirName ? "#eab308" : "transparent", // Gelb warnend, wenn Berechtigung fehlt
-              color: !hasPermission && dirName ? "#000" : "var(--text-h)",
-              border: "1px solid var(--border)",
+              backgroundColor: dirName ? "#eab308" : "transparent", // Gelb warnend, wenn Berechtigung fehlt
+              color: dirName ? "#000" : "var(--text-h)",
+              border: dirName ? "1px solid var(--border)" : "1px solid var(--accent)",
               borderRadius: "6px",
-              fontWeight: !hasPermission && dirName ? "600" : "normal",
+              fontWeight: dirName ? "600" : "normal",
               userSelect: "none",
             }}
           >
-            {!dirName
-              ? "Lokal-Ordner verbinden"
-              : !hasPermission
-                ? "🔑 Berechtigung erteilen"
-                : "Ordner wechseln"
-            }
+            {!dirName ? "lokalen Ordner verbinden" : "🔑 Berechtigung erteilen"}
           </button>
         )}
-        { !isOpen && (
-          <button
-            className="btn_32pxNormed"
-          >
-            <FolderOpen style={{ width: '19px', height: '19px' }}/>
-          </button>
-        )}
-      </div>
-      {/* Ordner-Status & Auswahl Ende */}
+      {/* Ordner Auswahl Ende */}
 
       {/* Die restliche Sidebar wird NUR angezeigt, wenn wir den Ordner UND die Erlaubnis haben */}
       {dirName && hasPermission ? (
@@ -238,7 +214,7 @@ function SidebarLeftComponent({
               padding: isOpen ? "10px" : '0',
               borderRadius: "6px",
               cursor: "pointer",
-              marginBottom: isOpen ? "20px" : '0',
+              marginBottom: isOpen ? "16px" : '0',
               fontWeight: "600",
               userSelect: "none",
               width: isOpen ? 'auto' : '32px',
@@ -256,7 +232,7 @@ function SidebarLeftComponent({
           </button>
           {/* Knopf Neue Mindmap Ende */}
 
-          {/* Anzeige: Gespeichert? + Datum Start */}
+          {/* Anzeige: Gespeichert? Start */}
           {isOpen && (
             <div
               style={{
@@ -272,19 +248,9 @@ function SidebarLeftComponent({
               ) : (
                 <span style={{ color: "orange" }}>● Ungespeichert</span>
               )}
-              <small
-                style={{
-                  color: "var(--text-h)",
-                  fontWeight: "normal",
-                  fontSize: "11px",
-                  marginLeft: "auto",
-                }}
-              >
-                ({CurrentMapDate})
-              </small>
             </div>
           )}
-          {/* Anzeige: Gespeichert? + Datum Ende */}
+          {/* Anzeige: Gespeichert? Ende */}
 
           {/* Auflistung Maps Start */}
           {isOpen && (
@@ -320,7 +286,10 @@ function SidebarLeftComponent({
                       <input
                         value={tempName}
                         onFocus={(e) => e.target.select()}
-                        onChange={(e) => setTempName(e.target.value)}
+                        onChange={(e) => {
+                          const sanitizedValue = e.target.value.replace(/[\/?<>\\:*|"]/g, '');
+                          setTempName(sanitizedValue);
+                        }}
                         onBlur={() => {
                           onRenameMap(map.id, tempName);
                           setEditingName(null);
@@ -394,7 +363,7 @@ function SidebarLeftComponent({
                             activeMenu === map.id ? "none" : "inline-block",
                         }}
                       >
-                        <MoreVertical style={{ width: "18px", height: "18px", color: "var(--text-h)" }} />
+                        <MoreVertical style={{ width: "18px", height: "18px" }} />
                       </button>
 
                       {activeMenu === map.id && (
@@ -550,14 +519,14 @@ function SidebarLeftComponent({
                           <span style={{ fontSize: '12px', color: 'var(--text)', lineHeight: '120%' }}>
                             Farbe gilt für das aktive Design:
                           </span>
-                          <span
-                            id="spanIsDarkIndicator"
-                            style={{
-                              cursor: 'default'
-                            }}
+                          <button
+                            currentMode={currentMode}
+                            className="btn_32pxNormed"
+                            onClick={onToggleMode}
+                            title={currentMode === 'dark' ? "Helles Design aktivieren" : "Dunkles Design aktivieren"}
                           >
                             {currentMode === 'dark' ? <Moon/> : <Sun/>}
-                          </span>
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -577,7 +546,26 @@ function SidebarLeftComponent({
                     }}>
                       Informationen
                     </h3>
+
                     <div style={{ fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      {/* letztes Bearbeitungsdatum der aktuellen Map */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <span
+                          title="Letzte Änderung dieser Mindmap:"
+                          style={{
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            flex: 1,
+                            color: 'var(--text-h)',
+                          }}>
+                            Letzte Änderung dieser Mindmap:
+                          </span>{' '}
+                        <div style={{ padding: '6px 8px', background: 'var(--code-bg)', borderRadius: '4px', opacity: 0.9 }}>
+                          <strong style={{ color: 'var(--text)' }}>{CurrentMapDate}</strong>
+                        </div>
+                      </div>
+
                       {/* Hinweisbox-Feld */}
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                         <span style={{ fontWeight: '600', color: 'var(--text-h)' }}>Nützliche Tipps:</span>
@@ -602,7 +590,9 @@ function SidebarLeftComponent({
                     </h3>
                     <div style={{ fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       
+                      {/* Mindmap-Löschen Bestätigung anzeigen */}
                       <label
+                        title="Zeigt eine Bestätigung, bevor eine Mindmap-Datei gelöscht wird"
                         style={{
                           display: 'flex',
                           alignItems: 'center',
@@ -616,7 +606,7 @@ function SidebarLeftComponent({
                           onChange={(e) => onConfirmDeleteChange(e.target.checked)}
                           style={{ flexShrink: 0 }}
                         />
-                        <span 
+                        <span
                           style={{
                             whiteSpace: 'nowrap',
                             overflow: 'hidden',
@@ -625,7 +615,7 @@ function SidebarLeftComponent({
                             color: 'var(--text-h)'
                           }}
                         >
-                          Vor dem Löschen nachfragen
+                          Mindmap-Löschen bestätigen
                         </span>
                       </label>
                       
@@ -677,11 +667,23 @@ function SidebarLeftComponent({
 
             <button
               className="btn_32pxNormed"
+              id="btn_sbl_file"
+              onClick={onSelectDir}
+              title="Ordnerpfad wechseln"
+              style={{
+                background: activePopup === 'file' ? 'var(--accent)' : '',
+                marginRight: 'auto'
+              }}
+            >
+              <FolderOpen/>
+            </button>
+
+            <button
+              className="btn_32pxNormed"
               id="btn_sbl_palette"
               onClick={() => handleButtonClick('palette')}
               title="Personalisierung"
               style={{
-                color: 'var(--text-h)',
                 background: activePopup === 'palette' ? 'var(--accent)' : ''
               }}
             >
@@ -696,7 +698,6 @@ function SidebarLeftComponent({
               }}
               title="Informationen"
               style={{
-                color: 'var(--text-h)',
                 background: activePopup === 'info' ? 'var(--accent)' : ''
               }}
             >
@@ -708,14 +709,13 @@ function SidebarLeftComponent({
               onClick={() => handleButtonClick('settings')}
               title="Einstellungen"
               style={{
-                color: 'var(--text-h)',
                 background: activePopup === 'settings' ? 'var(--accent)' : ''
               }}
             >
               <Settings/>
             </button>
-            
           </div>
+            
           {/* Einstellungen Ende */}
         </>
       ) : dirName && !hasPermission ? (

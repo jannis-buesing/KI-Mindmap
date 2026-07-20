@@ -1,13 +1,13 @@
-:root {
+:root, html[data-theme="light"] {
   --text: #6b6375;
   --text-h: #08060d;
   --bg: #fff;
   --border: #e5e4e7;
   --code-bg: #f8f9fa;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --default-node-border: #9c9c9c;
+  --accent: #b385d8;
+  --accent-bg: rgba(164, 115, 202, 0.1);
+  --accent-border: rgba(170, 119, 209, 0.5);
+  --default-node-border: #cfcfcf;
   --edgeDelete: #e47f7f;
 
   --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
@@ -33,6 +33,19 @@
     --default-node-border: #3f3f3f;
     --edgeDelete: #e47f7f;
   }
+}
+
+html[data-theme="dark"] {
+  --text: #9ca3af;
+  --text-h: #f3f4f6;
+  --bg: #5f626e;
+  --border: #2e303a;
+  --code-bg: #18181b;
+  --accent: #c084fc;
+  --accent-bg: rgba(192, 132, 252, 0.15);
+  --accent-border: rgba(192, 132, 252, 0.5);
+  --default-node-border: #3f3f3f;
+  --edgeDelete: #e47f7f;
 }
 
 body {
@@ -70,31 +83,55 @@ code {
 
 /* ===================== Buttons SideBarLeft Start ======================== */
 
+#pathFolderLink {
+  cursor: pointer;
+  transition: color 0.1s ease;
+}
+
+#pathFolderLink:hover {
+  text-decoration: underline;
+  color: var(--accent);
+}
+
 #btn_neueMindmap:hover {
   box-shadow: 0 0 12px var(--accent);
   transition: 0.2s;
 }
 
-#btn_ordnerWechselnBig:hover, .btn_mappedMindmaps:hover {
+.btn_mappedMindmaps:hover {
   background-color: var(--border) !important;
   border: 1px solid transparent !important;
   transition: 0.1s;
 }
 
-.btn_32pxNormed, #spanIsDarkIndicator {
-    background: none;
-    border: none;
-    cursor: pointer;
-    user-select: none;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    border-radius: 6px;
-    transition: background 0.2s, transform 0.1s;
-    font-size: 14px;
-  }
+#btn_ordnerWechselnBigNoHasPermission:hover {
+  background-color: #f3bc17 !important;
+  border: 1px solid transparent !important;
+  transition: 0.1s;
+}
+
+#btn_ordnerWechselnBigNoDirName:hover {
+  background-color: var(--border) !important;
+  border: 1px solid var(--accent) !important;
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 30%, transparent) !important;
+  transition: 0.1s;
+}
+
+.btn_32pxNormed {
+  background: none;
+  border: none;
+  color: var(--text-h);
+  cursor: pointer;
+  user-select: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  transition: background 0.2s, transform 0.1s;
+  font-size: 14px;
+}
 .btn_32pxNormed:hover {
   background: var(--accent, #e2e8f0);
 }
@@ -401,6 +438,7 @@ code {
 .proposal-button {
   border: 1px solid var(--accent); 
   background: var(--default-node-border);
+  color: var(--text-h);
   box-shadow: 0 8px 10px rgba(0,0,0,0.15);
   cursor: pointer;
   font-size: 14px;

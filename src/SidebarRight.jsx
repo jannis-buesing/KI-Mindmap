@@ -135,6 +135,8 @@ function SidebarRightComponent({
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
   }, [isOpen]);
 
+  // =============================================== RETURN ============================================
+
   return (
     <div
       onMouseEnter={() => setSBRisHovered(true)}
