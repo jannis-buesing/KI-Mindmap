@@ -74,7 +74,6 @@ function migrateTreeToFlat(data) {
 }
 
 function App() {
-  console.log("App Component Render");
   const [dirHandle, setDirHandle] = useState(null);
   const [hasPermission, setHasPermission] = useState(false);
   const [mapsList, setMapsList] = useState([]);
@@ -99,6 +98,26 @@ function App() {
   const labelDebounceRef = useRef(null);
   const [isViewReady, setIsViewReady] = useState(true);
   
+  // Undo/Redo Memory-only Stacks & State Tracker
+  const undoStack = useRef([]);
+  const redoStack = useRef([]);
+  const previousStateRef = useRef(null);
+
+  // Helfer für tiefe Kopien des Zustands
+  const cloneState = (data) => (data ? JSON.parse(JSON.stringify(data)) : null);
+
+  const getStructuralSnapshot = (data) => {
+    if (!data) return null;
+    return {
+      nodes: (data.nodes || []).map(n => ({ id: n.id, label: n.label, width: n.width, borderColor: n.borderColor, status: n.status })),
+      edges: (data.edges || []).map(e => ({ id: e.id, source: e.source, target: e.target })),
+      positions: Object.keys(data.positions || {}).reduce((acc, key) => {
+        acc[key] = { x: data.positions[key].x, y: data.positions[key].y };
+        return acc;
+      }, {})
+    };
+  };
+
   // Akzentfarbe ändern
   const [isDark, setIsDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches);
 
@@ -114,11 +133,11 @@ function App() {
   }, [userPickedAccentColor]);
 
   useEffect(() => {
-    const currentMode = isDark ? 'dark' : 'light';
+    const currentmode = isDark ? 'dark' : 'light';
 
-    document.documentElement.setAttribute('data-theme', currentMode);
+    document.documentElement.setAttribute('data-theme', currentmode);
 
-    const activeColor = userPickedAccentColor[currentMode];
+    const activeColor = userPickedAccentColor[currentmode];
     document.documentElement.style.setProperty('--accent', activeColor);
     const hexToRgb = (hex) => {
       let shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
@@ -147,7 +166,6 @@ function App() {
 
   useEffect(() => {
     async function initSavedDirectory() {
-      // 1. Alle asynchronen Daten im Hintergrund sammeln
       const savedHandle = await getStoredDirectoryHandle();
       if (!savedHandle) return;
 
@@ -213,6 +231,13 @@ function App() {
     const files = await loadMindmapsFromDirectory(dirHandle);
     setMapsList(files);
     const fileInfo = files.find(f => f.id === uniqueId);
+    
+    // Stacks & Status-Tracker leeren bei neuer Map
+    undoStack.current = [];
+    redoStack.current = [];
+    previousStateRef.current = null;
+    isInitialLoad.current = true;
+
     setMindmapData({ ...initialData, _currentFileName: fileInfo?.name || defaultName });
     setIsSaved(true);
 
@@ -233,45 +258,151 @@ function App() {
     if (dataToLoad.rootNode || !dataToLoad.nodes) {
       dataToLoad = migrateTreeToFlat(dataToLoad);
     }
+    
+    // Stacks & Status-Tracker leeren bei Map-Wechsel
+    undoStack.current = [];
+    redoStack.current = [];
+    previousStateRef.current = null;
     isInitialLoad.current = true;
+
     setMindmapData(dataToLoad);
     setIsSaved(true);
   }, [dirHandle, hasPermission, mapsList]);
 
-const [justCreatedNodeId, setJustCreatedNodeId] = useState(null);
+  const [justCreatedNodeId, setJustCreatedNodeId] = useState(null);
 
-// 5. Auto-Save-Effekt
+  // Auto-Save & Zentraler Checkpoint-Effekt
   useEffect(() => {
     if (!dirHandle || !hasPermission || !mindmapData?.id) return;
-    if(isInitialLoad.current){ isInitialLoad.current = false; return; }
-    if (isRenamingRef.current) { isRenamingRef.current = false; return; }
     
+    if (isInitialLoad.current) { 
+      isInitialLoad.current = false; 
+      previousStateRef.current = cloneState(mindmapData);
+
+      console.log("isInitialLoad.current = false; "); ///////////////////////////
+      return; 
+    }
+    if (isRenamingRef.current) { 
+      isRenamingRef.current = false; 
+      previousStateRef.current = cloneState(mindmapData);
+
+      console.log("isRenamingRef.current = false; "); ///////////////////////////
+      return; 
+    }
+
+    console.log("Auto-Save"); ////////////////////////////
+    
+    if (previousStateRef.current && previousStateRef.current.id === mindmapData.id) {
+      const oldStructure = getStructuralSnapshot(previousStateRef.current);
+      const newStructure = getStructuralSnapshot(mindmapData);
+
+      if (JSON.stringify(oldStructure) !== JSON.stringify(newStructure)) {
+        undoStack.current.push(cloneState(previousStateRef.current));
+        redoStack.current = [];
+      }
+    }
+
+    previousStateRef.current = cloneState(mindmapData);
+
     setIsSaved(false);
     const delayDebounce = setTimeout(async () => {
       await saveMindmapToFile(dirHandle, mindmapData.name, mindmapData, false);
       setIsSaved(true);
-      // Maps-Liste aktualisieren, damit die Sortierung in der Sidebar (nach Datum) aktuell bleibt
       const files = await loadMindmapsFromDirectory(dirHandle);
       setMapsList(files);
     }, 800);
+
+    console.log("undo: ", undoStack.current.length, ", redo: ", redoStack.current.length, ", previousStateRef: ", previousStateRef );
+
     return () => clearTimeout(delayDebounce);
   }, [mindmapData, dirHandle, hasPermission]);
 
-const handleDeleteMap = useCallback(async (id) => {
-  const foundMap = mapsList.find(m => m.id === id);
-  if (!foundMap) return;
-  
-  const shouldDelete = confirmDelete 
-    ? confirm(`Möchtest du '${foundMap.name}' wirklich löschen?`)
-    : true;
+  // Undo / Redo Ausführungs-Logik
+  const executeUndo = useCallback(() => {
+    if (undoStack.current.length === 0) return;
+    
+    const previousState = undoStack.current.pop();
 
-  if (shouldDelete) {
-    await deleteMindmapFile(dirHandle, foundMap.name);
-    const files = await loadMindmapsFromDirectory(dirHandle);
-    setMapsList(files);
-    if (mindmapData?.id === id) setMindmapData(null);
-  }
-}, [dirHandle, mapsList, mindmapData, confirmDelete]);
+    previousStateRef.current = cloneState(previousState);
+    
+    setMindmapData((currentLiveState) => {
+      if (!currentLiveState) return currentLiveState;
+      
+      redoStack.current.push(cloneState(currentLiveState));
+      
+      return previousState;
+    });
+  }, []);
+
+  const executeRedo = useCallback(() => {
+    if (redoStack.current.length === 0) return;
+
+    const nextState = redoStack.current.pop();
+
+    previousStateRef.current = cloneState(nextState);
+
+    setMindmapData((currentLiveState) => {
+      if (!currentLiveState) return currentLiveState;
+
+      undoStack.current.push(cloneState(currentLiveState));
+
+      return nextState;
+    });
+  }, []);
+
+  // Event Listener für globale Shortcuts (Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z)
+  useEffect(() => {
+    const handleKeyDownShortcuts = (e) => {
+      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+      const modifier = isMac ? e.metaKey : e.ctrlKey;
+
+      if (!modifier) return;
+
+      // Aggressiver Schreibmodus-Schutz
+      const targetTag = e.target.tagName.toLowerCase();
+      if (
+        targetTag === 'input' || 
+        targetTag === 'textarea' || 
+        e.target.isContentEditable ||
+        e.target.classList.contains('node-textarea') ||
+        e.target.closest('.nodrag') // Schützt Textareas in den Nodes direkt
+      ) {
+        return; 
+      }
+
+      const key = e.key.toLowerCase();
+
+      if (key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        executeUndo();
+      } else if ((key === 'y' && !e.shiftKey) || (key === 'z' && e.shiftKey)) {
+        e.preventDefault();
+        e.stopPropagation();
+        executeRedo();
+      }
+    };
+
+    // Aktiv im Bubble-Modus abfangen
+    window.addEventListener('keydown', handleKeyDownShortcuts, true);
+    return () => window.removeEventListener('keydown', handleKeyDownShortcuts, true);
+  }, [executeUndo, executeRedo]);
+
+  const handleDeleteMap = useCallback(async (id) => {
+    const foundMap = mapsList.find(m => m.id === id);
+    if (!foundMap) return;
+    
+    const shouldDelete = confirmDelete 
+      ? confirm(`Möchtest du '${foundMap.name}' wirklich löschen?`)
+      : true;
+
+    if (shouldDelete) {
+      await deleteMindmapFile(dirHandle, foundMap.name);
+      const files = await loadMindmapsFromDirectory(dirHandle);
+      setMapsList(files);
+      if (mindmapData?.id === id) setMindmapData(null);
+    }
+  }, [dirHandle, mapsList, mindmapData, confirmDelete]);
 
   const handleRenameMap = useCallback(async (id, newName) => {
     if (!newName) return;
@@ -302,14 +433,12 @@ const handleDeleteMap = useCallback(async (id) => {
   const handleCopyMap = useCallback(async (id) => {
     if (!dirHandle || !hasPermission) return;
     
-    // Fall 1: Es ist die aktuell geöffnete Mindmap -> Direkt den Live-State nehmen
     if (mindmapData && mindmapData.id === id) {
       setCopyMapData(mindmapData);
       setShowOverlay('copy');
       return;
     }
     
-    // Fall 2: Es ist eine andere Mindmap -> Daten asynchron aus der JSON-Datei lesen
     const foundMap = mapsList.find(m => m.id === id);
     if (!foundMap) return;
     
@@ -319,7 +448,6 @@ const handleDeleteMap = useCallback(async (id) => {
       const text = await file.text();
       let parsedData = JSON.parse(text);
       
-      // Falls es sich um ein altes Baumstruktur-Format handelt, migrieren
       if (parsedData.rootNode || !parsedData.nodes) {
         parsedData = migrateTreeToFlat(parsedData);
       }
@@ -340,6 +468,10 @@ const handleDeleteMap = useCallback(async (id) => {
 
   async function expandMindmap(userInput, onFailure) {
     if (!mindmapData?.name) { alert("Bitte wähle oder erstelle zuerst eine Mindmap in der linken Leiste!"); return; }
+
+    undoStack.current.push(cloneState(mindmapData));
+    redoStack.current = [];
+
     const targetMapId = mindmapData.id;
     setLoading(true);
     try {
@@ -361,16 +493,59 @@ const handleDeleteMap = useCallback(async (id) => {
         let newNodes = [...(prev.nodes || [])];
         let newEdges = [...(prev.edges || [])];
         const newPositions = { ...(prev.positions || {}) };
-        
+
+        // Anzeige in Map berechnen Start
+        const addedOps = operations.filter(op => op.type === 'added');
+
+        const addedCountsPerParent = {};
+        const uniqueParents = [];
+
+        addedOps.forEach(op => {
+          if (!addedCountsPerParent[op.parentId]) {
+            addedCountsPerParent[op.parentId] = 0;
+            uniqueParents.push(op.parentId);
+          }
+          addedCountsPerParent[op.parentId]++;
+        });
+
+        uniqueParents.sort((a, b) => {
+          const posXA = (newPositions[a] || { x: 0 }).x;
+          const posXB = (newPositions[b] || { x: 0 }).x;
+          return posXA - posXB;
+        });
+
+        const currentSiblingIndexPerParent = {};
+
         operations.forEach(op => {
           if (op.type === 'added') {
             const parentPos = newPositions[op.parentId] || { x: 0, y: 0 };
             const gridSize = 15;
             
-            // Zufälliger Versatz in der Nähe des Elternknotens
-            const offsetX = 240; // Rechts vom Elternteil
-            const offsetY = (Math.random() - 0.5) * 200; // Leicht versetzt nach oben/unten
-            
+            if (currentSiblingIndexPerParent[op.parentId] === undefined) {
+              currentSiblingIndexPerParent[op.parentId] = 0;
+            }
+            const currentIdx = currentSiblingIndexPerParent[op.parentId];
+            currentSiblingIndexPerParent[op.parentId]++;
+
+            const totalNodesForThisParent = addedCountsPerParent[op.parentId];
+            const totalDifferentParents = uniqueParents.length;
+            const parentOrderIndex = uniqueParents.indexOf(op.parentId);
+
+            const siblingSpacingX = 165; 
+            const baseOffsetY = 150;
+
+            const indexOffset = currentIdx - (totalNodesForThisParent - 1) / 2;
+            let offsetX = indexOffset * siblingSpacingX;
+
+            if (totalDifferentParents > 1) {
+              const parentOffsetDirection = parentOrderIndex - (totalDifferentParents - 1) / 2;
+              offsetX += parentOffsetDirection * 120; 
+            }
+
+            const vCurveEffect = Math.abs(indexOffset) * 30;
+            const offsetY = Math.max(90, baseOffsetY - vCurveEffect);
+            // Anzeige in Map berechnen Ende
+    
             const newPos = {
               x: Math.round((parentPos.x + offsetX) / gridSize) * gridSize,
               y: Math.round((parentPos.y + offsetY) / gridSize) * gridSize
@@ -380,7 +555,6 @@ const handleDeleteMap = useCallback(async (id) => {
             newEdges.push({ id: `e-${op.parentId}-${op.temporaryId}`, source: op.parentId, target: op.temporaryId });
             newPositions[op.temporaryId] = newPos;
             
-            // Sofort-Edit auch für KI-Knoten (optional, hier aktiviert)
             setTimeout(() => { 
               window.dispatchEvent(new CustomEvent('reactflow-node-created', { detail: { nodeId: op.temporaryId } })); 
             }, 100);
@@ -524,10 +698,8 @@ const handleDeleteMap = useCallback(async (id) => {
     }));
 
     if (field === 'label') {
-      // Bestehenden Timer löschen, falls der Nutzer weitertippt
       if (labelDebounceRef.current) clearTimeout(labelDebounceRef.current);
 
-      // Erst nach 300ms Inaktivität wird der globale Zustand aktualisiert
       labelDebounceRef.current = setTimeout(() => {
         setMindmapData((prev) => {
           if (!prev) return prev;
@@ -540,7 +712,6 @@ const handleDeleteMap = useCallback(async (id) => {
         });
       }, 300);
     } else {
-      // Andere UI-Änderungen (wie z.B. borderColor) direkt ohne Verzögerung durchreichen
       setMindmapData((prev) => {
         if (!prev) return prev;
         const newNodes = (prev.nodes || []).map(node => {
@@ -562,18 +733,11 @@ const handleDeleteMap = useCallback(async (id) => {
 
     setMindmapData((prev) => {
       if (!prev) return prev;
-
-      // Nur die Kanten herausfiltern, deren ID in der Löschliste steht
       const newEdges = (prev.edges || []).filter(edge => !edgeIds.includes(edge.id));
-
-      return { 
-        ...prev, 
-        edges: newEdges 
-      };
+      return { ...prev, edges: newEdges };
     });
   }, []);
 
-  // =================================== RETURN =======================================
   return (
     <div onContextMenu={(e) => e.preventDefault()} style={{ display: 'flex', position: 'relative', flex: '1 1 auto', width: '100vw', height: '100vh', overflow: 'hidden' }}>
       <Analytics/>
@@ -595,7 +759,7 @@ const handleDeleteMap = useCallback(async (id) => {
         onUserApiKeyChange={setUserApiKey}
         userPickedAccentColor={userPickedAccentColor}
         setUserPickedAccentColor={setUserPickedAccentColor}
-        currentMode={isDark ? 'dark' : 'light'}
+        currentmode={isDark ? 'dark' : 'light'}
         onToggleMode={handleToggleMode}
         onCopyMap={handleCopyMap}
         setOverlayAPIKeyTutorial={setOverlayAPIKeyTutorial}

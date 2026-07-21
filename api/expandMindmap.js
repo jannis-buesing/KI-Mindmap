@@ -7,7 +7,7 @@ export default async function handler(request, response) {
 
   const { nodes, edges, selectedNodeIds, userInput, userApiKey } = request.body;
 
-  const activeApiKey = userApiKey || process.env.GEMINI_API_KEY;
+  const activeApiKey = userApiKey || process.env.VITE_GEMINI_API_KEY;
   if (!activeApiKey) {
     return response.status(400).json({ error: "Kein API-Schlüssel konfiguriert. Bitte gib einen eigenen Schlüssel ein." });
   }

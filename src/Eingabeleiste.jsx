@@ -161,7 +161,7 @@ function EingabeleisteComponent({
           width: '100%',
           boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
           transition: 'border-color 0.2s',
-          boxSizing: 'border-box'
+          boxSizing: 'border-box',
         }}>
           <input
             ref={inputRef}
@@ -217,7 +217,8 @@ function EingabeleisteComponent({
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              transition: 'all 0.2s'
+              transition: 'all 0.2s',
+              userSelect: 'none'
             }}
           >
             {loading ? (

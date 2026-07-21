@@ -83,7 +83,7 @@ function SidebarLeftComponent({
   onUserApiKeyChange,
   userPickedAccentColor,
   setUserPickedAccentColor,
-  currentMode,
+  currentmode,
   onToggleMode,
   onCopyMap,
   setOverlayAPIKeyTutorial,
@@ -131,7 +131,7 @@ function SidebarLeftComponent({
   const handleColorChange = (newHexColor) => {
     setUserPickedAccentColor(prev => ({
       ...prev,
-      [currentMode]: newHexColor
+      [currentmode]: newHexColor
     }));
   };
 
@@ -491,14 +491,14 @@ function SidebarLeftComponent({
                             title="Auf Standardfarbe zurücksetzen"
                             className="btn_32pxNormed"
                             onClick={() => {
-                              const modeWord = currentMode === 'dark' ? 'dunklen' : 'hellen';
+                              const modeWord = currentmode === 'dark' ? 'dunklen' : 'hellen';
                               const confirmed = window.confirm(`Möchtest du die Akzentfarbe für den ${modeWord} Modus wirklich auf die Standardfarbe zurücksetzen?`);
                               
                               if (confirmed) {
                                 const defaultColors = { light: '#aa3bff', dark: '#c084fc' };
                                 setUserPickedAccentColor(prev => ({
                                   ...prev,
-                                  [currentMode]: defaultColors[currentMode]
+                                  [currentmode]: defaultColors[currentmode]
                                 }));
                               }
                             }}
@@ -509,7 +509,7 @@ function SidebarLeftComponent({
                         
                         {/* Der Picker bekommt jetzt nur den String des aktiven Modus */}
                         <HexColorPicker 
-                          color={userPickedAccentColor[currentMode]} 
+                          color={userPickedAccentColor[currentmode]} 
                           onChange={handleColorChange}
                           style={{ width: '100%', height: '140px' }}
                         />
@@ -520,12 +520,12 @@ function SidebarLeftComponent({
                             Farbe gilt für das aktive Design:
                           </span>
                           <button
-                            currentMode={currentMode}
+                            currentmode={currentmode}
                             className="btn_32pxNormed"
                             onClick={onToggleMode}
-                            title={currentMode === 'dark' ? "Helles Design aktivieren" : "Dunkles Design aktivieren"}
+                            title={currentmode === 'dark' ? "Helles Design aktivieren" : "Dunkles Design aktivieren"}
                           >
-                            {currentMode === 'dark' ? <Moon/> : <Sun/>}
+                            {currentmode === 'dark' ? <Moon/> : <Sun/>}
                           </button>
                         </div>
                       </div>

@@ -306,6 +306,10 @@ code {
   border-radius: 4px;
 }
 
+.react-flow__node:hover {
+  z-index: 99999 !important;
+}
+
 /* ausgewählte Nodes */
 .react-flow__node,
 .react-flow__node.selected,
@@ -423,7 +427,7 @@ code {
 
 .proposal-buttons-container {
   position: absolute; 
-  top: -45px; 
+  top: -32px; 
   left: 50%; 
   transform: translateX(-50%);
   background: none; 
@@ -432,7 +436,6 @@ code {
   display: flex; 
   gap: 6px; 
   font-size: 12px;
-  z-index: 9999;
 }
 
 .proposal-button {
@@ -481,7 +484,7 @@ code {
 
 /* 2. Der verzögerte Hover-Effekt (Die Magie) */
 .react-flow__edge:hover .react-flow__edge-path {
-  stroke-width: 4;
+  stroke-width: 4 !important;
   cursor: pointer;
 }
 

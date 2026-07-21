@@ -88,7 +88,7 @@ export async function saveMindmapToFile(directoryHandle, fileName, data, isRenam
     const writable = await fileHandle.createWritable();
     await writable.write(JSON.stringify(updatedData, null, 2));
     await writable.close();
-    console.log("Fertig geschrieben: ", updatedData);
+    // console.log("Fertig geschrieben: ", updatedData);
     return true;
   } catch (error) {
     console.error("Fehler beim Speichern:", error);

@@ -10,7 +10,8 @@ import {
   ReactFlowProvider,
   useReactFlow,
   Handle,
-  Position
+  Position,
+  useUpdateNodeInternals
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Check, X } from 'lucide-react';
@@ -101,8 +102,8 @@ function EditableMindmapNodeComponent({ id, data, isConnectable, selected }) {
     }
 
     const totalRawHeight = textHeight + 24;
-    const gridSize = 15;
-    const snappedHeight = Math.max(Math.ceil(totalRawHeight / gridSize) * gridSize, 60);
+
+    const snappedHeight = Math.max(Math.ceil(totalRawHeight / 30) * 30, 60);
     setMeasuredHeight(snappedHeight);
   }, [data.label, value, isEditing, currentWidth]);
 
@@ -151,8 +152,15 @@ function EditableMindmapNodeComponent({ id, data, isConnectable, selected }) {
   const stopResizing = () => {
     window.removeEventListener('mousemove', doResize);
     window.removeEventListener('mouseup', stopResizing);
+
+    if (resizeRef.current.intervalId) {
+      clearInterval(resizeRef.current.intervalId);
+      resizeRef.current.intervalId = null;
+    }
+
     const finalWidth = resizeRef.current.finalWidth;
     setCurrentWidth(finalWidth);
+
     window.dispatchEvent(new CustomEvent('nodeResize', { 
       detail: { nodeId: id, width: finalWidth, isDragging: false } 
     }));
@@ -163,13 +171,25 @@ function EditableMindmapNodeComponent({ id, data, isConnectable, selected }) {
     e.stopPropagation();
     e.preventDefault();
     const { min, max } = calculateWidthLimits();
+
+    if (resizeRef.current.intervalId) {
+      clearInterval(resizeRef.current.intervalId);
+    }
+
+    const intervalId = setInterval(() => {
+      window.dispatchEvent(new CustomEvent('nodeResize', { 
+        detail: { nodeId: id, width: resizeRef.current.finalWidth, isDragging: true } 
+      }));
+    }, 50);
+
     resizeRef.current = {
       startX: e.clientX,
       startWidth: currentWidth,
       min,
       max,
       finalWidth: currentWidth,
-      lastDispatchedWidth: currentWidth
+      lastDispatchedWidth: currentWidth,
+      intervalId
     };
     
     // Sofort beim Start des Resizens Event abfeuern, um Markierung und Höhe zu aktualisieren
@@ -211,8 +231,8 @@ function EditableMindmapNodeComponent({ id, data, isConnectable, selected }) {
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       style={{
-        width: `${currentWidth}px`,
-        height: `${measuredHeight}px`,
+        width: `${data.width || currentWidth}px`,
+        height: `${data.height || measuredHeight}px`,
         background: backgroundColor,
         borderWidth: '2px',
         borderStyle: 'solid',
@@ -231,7 +251,7 @@ function EditableMindmapNodeComponent({ id, data, isConnectable, selected }) {
           </button>
         </div>
       )}
-      <Handle type="target" position={Position.Top} isConnectable={isConnectable} style={{ opacity: 1, top: '-2px', background: 'var(--border)', border: '1px solid var(--text-h)', width: '6px', height: '6px' }} />
+      <Handle type="target" position={Position.Left} isConnectable={isConnectable} style={{ opacity: 1, left: '-2px', background: 'var(--border)', border: '1px solid var(--text-h)', width: '6px', height: '6px', zIndex: 2 }} />
       <div className="node-content-wrapper">
         {data.status === 'updated' && data.oldLabel && (
           <div style={{ fontSize: '10px', textDecoration: 'line-through', opacity: 0.5, marginBottom: '2px' }}>{data.oldLabel}</div>
@@ -242,8 +262,8 @@ function EditableMindmapNodeComponent({ id, data, isConnectable, selected }) {
           <div className={`node-label ${data.status === 'deleted' ? 'node-deleted-label' : ''}`}>{data.label}</div>
         )}
       </div>
-      <div ref={resizeHandleRef} onMouseDown={startResizing} className="nodrag node-resize-handle" />
-      <Handle type="source" position={Position.Bottom} isConnectable={isConnectable} style={{ opacity: 1, bottom: '-2px', background: 'var(--border)', border: '1px solid var(--text-h)', width: '6px', height: '6px' }} />
+      <div ref={resizeHandleRef} onMouseDown={startResizing} className="nodrag node-resize-handle" style={{ zIndex: 1 }}/>
+      <Handle type="source" position={Position.Right} isConnectable={isConnectable} style={{ opacity: 1, right: '-2px', background: 'var(--border)', border: '1px solid var(--text-h)', width: '6px', height: '6px', zIndex: 2 }} />
     </div>
   );
 }
@@ -260,6 +280,7 @@ export const EditableMindmapNode = React.memo(EditableMindmapNodeComponent, (pre
   return (
     p.label === n.label &&
     p.width === n.width &&
+    p.height === n.height &&
     p.status === n.status &&
     p.borderColor === n.borderColor &&
     p.backgroundColor === n.backgroundColor &&
@@ -274,6 +295,8 @@ export function MindmapBoardContent({ rawData, setMindmapData, currentFileName, 
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const { getNodes, screenToFlowPosition, fitView } = useReactFlow();
+
+  const updateNodeInternals = useUpdateNodeInternals();
 
   const nodesRef = useRef(nodes);
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
@@ -293,18 +316,9 @@ export function MindmapBoardContent({ rawData, setMindmapData, currentFileName, 
 
   useEffect(() => {
     const triggerFit = () => {
-      
-        console.log("triggerfit");
-
-
       const ausführenTriggerFit = async () => {
         
-        
-        console.log("vorm await fitview");
-
         await fitView({ padding: 5, duration: 0 });
-
-        console.log("vorm setisviewready");
 
         setIsViewReady(true);
 
@@ -321,6 +335,16 @@ export function MindmapBoardContent({ rawData, setMindmapData, currentFileName, 
     window.addEventListener('reactflow-trigger-fitview', triggerFit);
     return () => window.removeEventListener('reactflow-trigger-fitview', triggerFit);
   }, [fitView, setIsViewReady]);
+
+  // Beim Map-Wechsel automatisch hinzoomen
+  useEffect(() => {
+    if (nodes.length > 0 && currentFileName) {
+      const timer = setTimeout(() => {
+        fitView({ padding: 0.2, duration: 1000 });
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [currentFileName, fitView, nodes.length]);
 
   const positionsRef = useRef(positions);
   useEffect(() => { positionsRef.current = positions; }, [positions]);
@@ -358,10 +382,13 @@ export function MindmapBoardContent({ rawData, setMindmapData, currentFileName, 
       }
 
       const alignedWidth = Math.round((node.width || 210) / 30) * 30;
+      const alignedHeight = node.height ? Math.round(node.height / 30) * 30 : 60;
+
       const nodeData = {
         label: node.label,
         isRootNode: node.isRootNode || node.id === 'root',
         width: alignedWidth,
+        height: alignedHeight,
         borderColor: borderColor,
         backgroundColor: backgroundColor,
         status: node.status,
@@ -373,7 +400,7 @@ export function MindmapBoardContent({ rawData, setMindmapData, currentFileName, 
         type: node.status ? 'proposalNode' : 'default',
         data: nodeData,
         position: positionsRef.current?.[node.id] || { x: 0, y: 0 },
-        style: { width: alignedWidth, background: 'none', borderWidth: 0, borderStyle: 'none', padding: 0, boxShadow: 'none', zIndex: node.status ? 1 : 0 }
+        style: { width: alignedWidth, height: alignedHeight, background: 'none', borderWidth: 0, borderStyle: 'none', padding: 0, boxShadow: 'none', zIndex: node.status ? 1 : 0 }
       };
     });
 
@@ -594,78 +621,91 @@ export function MindmapBoardContent({ rawData, setMindmapData, currentFileName, 
     }
   }, [onNodesSelect, getNodes]);
 
+  const resizeIntervalRef = useRef(null);
+
   const handleNodeResize = useCallback((e) => {
     const { nodeId, width, isDragging } = e.detail;
-    if (isDragging) {
-      const currentFlowNodes = nodesRef.current;
-      
-      // Falls der aktuelle Knoten noch nicht markiert ist, markieren wir ihn sofort
-      const targetNode = currentFlowNodes.find(n => n.id === nodeId);
-      if (targetNode && !targetNode.selected) {
-        setNodes((nds) => nds.map((n) => {
-          if (n.id === nodeId) {
-            return { ...n, selected: true };
-          }
-          return n;
-        }));
+    const currentFlowNodes = nodesRef.current;
+
+    const activeSelection = currentFlowNodes.filter(n => n.selected).map(n => n.id);
+    const targetNodeIds = activeSelection.includes(nodeId) ? activeSelection : [nodeId];
+
+    const getSnappedHeightForWidth = (id, targetWidth) => {
+      const nodeElement = document.querySelector(`[data-id="${id}"]`);
+      if (!nodeElement) return 60;
+
+      const textarea = nodeElement.querySelector('textarea');
+      const labelDiv = nodeElement.querySelector('.node-label');
+      let textHeight = 20;
+
+      if (textarea) {
+        const oldWidth = textarea.style.width;
+        const oldHeight = textarea.style.height;
+        textarea.style.width = `${targetWidth - 30}px`;
+        textarea.style.height = "auto";
+        textHeight = textarea.scrollHeight;
+        textarea.style.width = oldWidth;
+        textarea.style.height = oldHeight;
+      } else if (labelDiv) {
+        const oldWidth = labelDiv.style.width;
+        labelDiv.style.width = `${targetWidth - 30}px`;
+        textHeight = labelDiv.offsetHeight;
+        labelDiv.style.width = oldWidth;
       }
 
-      const activeSelection = currentFlowNodes.filter(n => n.selected).map(n => n.id);
-      const targetNodeIds = activeSelection.includes(nodeId) ? activeSelection : [nodeId];
-      targetNodeIds.forEach(id => {
-        const nodeElement = document.querySelector(`[data-id="${id}"]`);
-        if (nodeElement) {
-          nodeElement.style.width = `${width}px`;
-          const innerNode = nodeElement.querySelector('.node-content-wrapper')?.parentNode;
-          if (innerNode) {
-            innerNode.style.width = `${width}px`;
-            
-            // Sofortige Höhenaktualisierung beim Resizen (Höhe neu berechnen)
-            const textarea = innerNode.querySelector('textarea');
-            const labelDiv = innerNode.querySelector('.node-label');
-            
-            let textHeight = 20;
-            if (textarea) {
-              textarea.style.height = "auto";
-              textHeight = textarea.scrollHeight;
-              textarea.style.height = `${textHeight}px`;
-            } else if (labelDiv) {
-              textHeight = labelDiv.offsetHeight;
-            }
-            
-            const totalRawHeight = textHeight + 24;
-            const gridSize = 15;
-            const snappedHeight = Math.max(Math.ceil(totalRawHeight / gridSize) * gridSize, 60);
-            
-            nodeElement.style.height = `${snappedHeight}px`;
-            innerNode.style.height = `${snappedHeight}px`;
-          }
+      return Math.max(Math.ceil((textHeight + 24) / 30) * 30, 60);
+    };
+
+    if (isDragging) {
+      setNodes((nds) => nds.map((node) => {
+        if (targetNodeIds.includes(node.id)) {
+          const snappedHeight = getSnappedHeightForWidth(node.id, width);
+          return { 
+            ...node, 
+            selected: node.id === nodeId ? true : node.selected,
+            style: { ...node.style, width: width, height: snappedHeight }, 
+            data: { ...node.data, width: width, height: snappedHeight } 
+          };
         }
-      });
+        return node;
+      }));
+
+      if (!resizeIntervalRef.current) {
+        resizeIntervalRef.current = setInterval(() => {
+          targetNodeIds.forEach(id => updateNodeInternals(id));
+          console.log("intervall");
+        }, 40);
+      }
       return;
     }
 
-    const flowNodes = getNodes();
-    const activeSelection = flowNodes.filter(n => n.selected).map(n => n.id);
-    const targetNodeIds = activeSelection.includes(nodeId) ? activeSelection : [nodeId];
+    if (resizeIntervalRef.current) {
+      clearInterval(resizeIntervalRef.current);
+      resizeIntervalRef.current = null;
+    }
 
-    // BEIDE Zustands-Updates müssen in denselben startTransition-Block,
-    // damit sie gesammelt asynchron im Hintergrund verarbeitet werden!
     startTransition(() => {
       setNodes((nds) => nds.map((node) => {
         if (targetNodeIds.includes(node.id)) {
-          return { ...node, style: { ...node.style, width: width }, data: { ...node.data, width: width } };
+          const snappedHeight = getSnappedHeightForWidth(node.id, width);
+          return { ...node, style: { ...node.style, width: width, height: snappedHeight }, data: { ...node.data, width: width, height: snappedHeight } };
         }
         return node;
       }));
 
       setMindmapData((prev) => {
         if (!prev || !prev.nodes) return prev;
-        const newNodes = prev.nodes.map(node => targetNodeIds.includes(node.id) ? { ...node, width: width } : node);
+        const newNodes = prev.nodes.map(node => {
+          if (targetNodeIds.includes(node.id)) {
+            const snappedHeight = getSnappedHeightForWidth(node.id, width);
+            return { ...node, width: width, height: snappedHeight };
+          }
+          return node;
+        });
         return { ...prev, nodes: newNodes };
       });
     });
-  }, [getNodes, setNodes, setMindmapData]);
+  }, [setNodes, setMindmapData, updateNodeInternals]);
 
   useEffect(() => {
     window.addEventListener("nodeResize", handleNodeResize);
