@@ -495,7 +495,7 @@ function SidebarLeftComponent({
                               const confirmed = window.confirm(`Möchtest du die Akzentfarbe für den ${modeWord} Modus wirklich auf die Standardfarbe zurücksetzen?`);
                               
                               if (confirmed) {
-                                const defaultColors = { light: '#aa3bff', dark: '#c084fc' };
+                                const defaultColors = { light: '#b385d8', dark: '#c084fc' };
                                 setUserPickedAccentColor(prev => ({
                                   ...prev,
                                   [currentmode]: defaultColors[currentmode]

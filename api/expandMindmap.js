@@ -1,9 +1,33 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
+const rateLimitMap = new Map();
+
 export default async function handler(request, response) {
   if (request.method !== 'POST') {
     return response.status(405).json({ error: 'Methode nicht erlaubt' });
   }
+
+  // IP als Identifikation heranziehen
+  const ip = request.headers["x-forwarded-for"] || "anonymous";
+  const now = Date.now();
+  const windowMs = 60 * 1000; // 1 Minute Zeitfenster
+  const maxRequests = 1;      // Max. 5 Anfragen pro Minute
+
+  if (!rateLimitMap.has(ip)) {
+    rateLimitMap.set(ip, []);
+  }
+
+  // Alte Zeitstempel außerhalb des Zeitfensters entfernen
+  const timestamps = rateLimitMap.get(ip).filter(time => now - time < windowMs);
+  
+  if (timestamps.length >= maxRequests) {
+    return response.status(429).json({ 
+      error: "Zu viele Anfragen. Aktuell ist 1 Anfrage pro Minute möglich." 
+    });
+  }
+
+  timestamps.push(now);
+  rateLimitMap.set(ip, timestamps);
 
   const { nodes, edges, selectedNodeIds, userInput, userApiKey } = request.body;
 
