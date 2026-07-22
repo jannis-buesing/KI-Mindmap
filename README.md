@@ -1,7 +1,27 @@
+<div align="center">
+
+# KI Mindmap
+
+[im Browser öffnen →](https://deine-app.vercel.app)
+
+  <img src="./assets/KI_Mindmap.mp4" alt="Anwendungsvorschau" width="100%">
+</div>
+
+<br>
 
 
+## Funktionen
 
+* **Funktion 1:** Beschreibung der ersten Kernfunktionalität.
+* **Funktion 2:** Beschreibung der zweiten Kernfunktionalität.
+* **Funktion 3:** Beschreibung der dritten Kernfunktionalität.
+* **Funktion 4:** Beschreibung der vierten Kernfunktionalität.
+  
+  ---
+<div align="center">
 
-# .bat-Datei bereithalten und ausführen
-# mit Ordner verbinden
-# Zugriffsberechtigungen erteilen
+## Support
+
+[Fehler melden](https://github.com/DEIN-BENUTZERNAME/DEIN-REPO/issues) - [Feature vorschlagen](https://github.com/DEIN-BENUTZERNAME/DEIN-REPO/issues)
+
+</div>
