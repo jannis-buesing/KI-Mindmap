@@ -2,9 +2,9 @@
 
 # KI Mindmap
 
-[im Browser öffnen →](https://deine-app.vercel.app)
+[im Browser öffnen →](https://ki-mindmap.vercel.app/)
 
-  <img src="./assets/KI_Mindmap.mp4" alt="Anwendungsvorschau" width="100%">
+  <img src="./assets/KI_Mindmap.gif" alt="Anwendungsvorschau" width="100%">
 </div>
 
 <br>
