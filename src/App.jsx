@@ -210,12 +210,11 @@ function App() {
     setIsViewReady(false);
 
     const uniqueId = `${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-    const defaultName = 'Neue Mindmap';
+    const defaultName = 'Meine Mindmap...';
     const initialData = {
       id: uniqueId,
       name: defaultName,
       _currentFileName: '',
-      lastChanged: Date.now(),
       date: Date.now(),
       nodes: [{
         id: 'root',
@@ -269,8 +268,6 @@ function App() {
     setIsSaved(true);
   }, [dirHandle, hasPermission, mapsList]);
 
-  const [justCreatedNodeId, setJustCreatedNodeId] = useState(null);
-
   // Auto-Save & Zentraler Checkpoint-Effekt
   useEffect(() => {
     if (!dirHandle || !hasPermission || !mindmapData?.id) return;
@@ -279,18 +276,14 @@ function App() {
       isInitialLoad.current = false; 
       previousStateRef.current = cloneState(mindmapData);
 
-      console.log("isInitialLoad.current = false; "); ///////////////////////////
       return; 
     }
     if (isRenamingRef.current) { 
       isRenamingRef.current = false; 
       previousStateRef.current = cloneState(mindmapData);
 
-      console.log("isRenamingRef.current = false; "); ///////////////////////////
       return; 
     }
-
-    console.log("Auto-Save"); ////////////////////////////
     
     if (previousStateRef.current && previousStateRef.current.id === mindmapData.id) {
       const oldStructure = getStructuralSnapshot(previousStateRef.current);
@@ -306,13 +299,19 @@ function App() {
 
     setIsSaved(false);
     const delayDebounce = setTimeout(async () => {
-      await saveMindmapToFile(dirHandle, mindmapData.name, mindmapData, false);
+      const dataToSave = {
+        ...mindmapData,
+        nodes: mindmapData.nodes.map(({ isNew, ...node }) => node)
+      };
+
+      // await saveMindmapToFile(dirHandle, mindmapData.name, mindmapData, false);
+      await saveMindmapToFile(dirHandle, mindmapData.name, dataToSave, false);
       setIsSaved(true);
       const files = await loadMindmapsFromDirectory(dirHandle);
       setMapsList(files);
     }, 800);
 
-    console.log("undo: ", undoStack.current.length, ", redo: ", redoStack.current.length, ", previousStateRef: ", previousStateRef );
+    // console.log("undo: ", undoStack.current.length, ", redo: ", redoStack.current.length, ", previousStateRef: ", previousStateRef );
 
     return () => clearTimeout(delayDebounce);
   }, [mindmapData, dirHandle, hasPermission]);
@@ -555,9 +554,11 @@ function App() {
             newEdges.push({ id: `e-${op.parentId}-${op.temporaryId}`, source: op.parentId, target: op.temporaryId });
             newPositions[op.temporaryId] = newPos;
             
-            setTimeout(() => { 
-              window.dispatchEvent(new CustomEvent('reactflow-node-created', { detail: { nodeId: op.temporaryId } })); 
-            }, 100);
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                window.dispatchEvent(new CustomEvent('reactflow-node-created', { detail: { nodeId: op.temporaryId } }));
+              });
+            });
           } else if (op.type === 'updated') {
             newNodes = newNodes.map(node => node.id === op.nodeId ? { ...node, status: 'updated', oldLabel: node.label, label: op.label } : node);
           } else if (op.type === 'deleted') {
@@ -628,45 +629,31 @@ function App() {
     handleNodeDelete: (e) => handleDeleteNodes(e.detail.nodeIds),
     handleEdgeDelete: (e) => handleDeleteEdges(e.detail.edgeIds),
     handleNodeCreate: (e) => handleCreateNode(e.detail.position, e.detail.parentId),
-    handleNodeInitialized: (e) => {
-      setMindmapData((prev) => {
-        if (!prev) return prev;
-        const newNodes = (prev.nodes || []).map(node => node.id === e.detail.nodeId ? { ...node, isNew: false } : node);
-        return { ...prev, nodes: newNodes };
-      });
-    }
   };
 
   useEffect(() => {
     const trigger = (name) => (e) => {
-      if (name === 'handleNodeInitialized') {
-        setJustCreatedNodeId(prev => prev === e.detail.nodeId ? null : prev);
-      }
       return eventHandlersRef.current[name]?.(e);
     };
     const onLiveLabel = trigger('handleLiveLabel');
     const onNodeDelete = trigger('handleNodeDelete');
     const onEdgeDelete = trigger('handleEdgeDelete');
     const onNodeCreate = trigger('handleNodeCreate');
-    const onNodeInit = trigger('handleNodeInitialized');
     window.addEventListener('reactflow-live-label', onLiveLabel);
     window.addEventListener('reactflow-nodes-delete', onNodeDelete);
     window.addEventListener('reactflow-edges-delete', onEdgeDelete);
     window.addEventListener('reactflow-node-create', onNodeCreate);
-    window.addEventListener('reactflow-node-initialized', onNodeInit);
     return () => {
       window.removeEventListener('reactflow-live-label', onLiveLabel);
       window.removeEventListener('reactflow-nodes-delete', onNodeDelete);
       window.removeEventListener('reactflow-edges-delete', onEdgeDelete);
       window.removeEventListener('reactflow-node-create', onNodeCreate);
-      window.removeEventListener('reactflow-node-initialized', onNodeInit);
     };
   }, []);
 
   const handleCreateNode = useCallback((position, parentId) => {
     const newNodeId = `node_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-    const newNode = { id: newNodeId, label: 'Neuer Knoten' };
-    setJustCreatedNodeId(newNodeId);
+    const newNode = { id: newNodeId, label: 'Meine Idee...', isNew: true };
     setMindmapData((prev) => {
       if (!prev) return prev;
       const newNodes = [...(prev.nodes || []), newNode];
@@ -676,7 +663,6 @@ function App() {
       newPositions[newNodeId] = position;
       return { ...prev, nodes: newNodes, edges: newEdges, positions: newPositions };
     });
-    setTimeout(() => { window.dispatchEvent(new CustomEvent('reactflow-node-created', { detail: { nodeId: newNodeId } })); }, 50);
   }, []);
 
   const handleDeleteNodes = useCallback((nodeIds) => {
@@ -773,11 +759,10 @@ function App() {
           <MindmapBoard 
             rawData={mindmapData}
             setMindmapData={setMindmapData}
-            currentFileName={mindmapData?.name}
+            currentFileName={mindmapData?._currentFileName}
             positions={mindmapData.positions} 
             onNodesSelect={setSelectedNodeIds}
             selectedNodeIds={selectedNodeIds}
-            justCreatedNodeId={justCreatedNodeId}
             isEdgeSelectMode={isEdgeSelectMode}
             setIsEdgeSelectMode={setIsEdgeSelectMode}
             isViewReady={isViewReady}

@@ -63,13 +63,6 @@ async function getUniqueFileName(directoryHandle, baseName, extension = '.json')
 export async function saveMindmapToFile(directoryHandle, fileName, data, isRenaming) {
   if (!directoryHandle) return false;
 
-  const updatedData = {
-    ...data,
-    lastChanged: isRenaming 
-      ? (data.lastChanged || Date.now())
-      : Date.now()
-  }
-
   try {
     let finalFileName;
 
@@ -81,14 +74,21 @@ export async function saveMindmapToFile(directoryHandle, fileName, data, isRenam
       finalFileName = await getUniqueFileName(directoryHandle, fileName);
     }
 
+    const updatedData = {
+      ...data,
+      date: isRenaming 
+        ? (data?.date || Date.now())
+        : Date.now(),
+      _currentFileName: finalFileName.replace('.json', '')
+    }
+
+    delete updatedData.lastChanged;
+
     const fileHandle = await directoryHandle.getFileHandle(finalFileName, { create: true });
-
-    updatedData._currentFileName = finalFileName.replace('.json', '');
-
     const writable = await fileHandle.createWritable();
     await writable.write(JSON.stringify(updatedData, null, 2));
     await writable.close();
-    // console.log("Fertig geschrieben: ", updatedData);
+
     return true;
   } catch (error) {
     console.error("Fehler beim Speichern:", error);
@@ -108,13 +108,12 @@ export async function loadMindmapsFromDirectory(directoryHandle) {
         try {
           const parsed = JSON.parse(text);
           const currentFileName = entry.name.replace('.json', '');
-          
           const uniqueId = parsed.id || `${Date.now()}_${Math.floor(Math.random() * 1000)}`;
 
           files.push({
             id: uniqueId,
             name: currentFileName,
-            date: parsed.lastChanged || file.lastModified
+            date: parsed.date || parsed.lastChanged || file.lastModified
           });
         } catch (e) {
           files.push({

@@ -30,22 +30,25 @@ function EditableMindmapNodeComponent({ id, data, isConnectable, selected }) {
   }, [data.label]);
 
   useEffect(() => {
-    if (isEditing && inputRef.current) {
-      inputRef.current.focus();
-      inputRef.current.select();
+    if (isEditing) {
+      requestAnimationFrame(() => {
+        if (inputRef.current) {
+          inputRef.current.focus();
+          inputRef.current.select();
+        }
+      });
     }
   }, [isEditing]);
 
-  // Sofortiger Edit-Modus für neu erstellte Knoten via Event
+  // Sofortiger Edit-Modus für neu erstellte Knoten
+const hasInitializedRef = useRef(false);
+
   useEffect(() => {
-    const handleCreated = (e) => {
-      if (e.detail.nodeId === id) {
-        setIsEditing(true);
-      }
-    };
-    window.addEventListener('reactflow-node-created', handleCreated);
-    return () => window.removeEventListener('reactflow-node-created', handleCreated);
-  }, [id]);
+    if (data.isNew && !hasInitializedRef.current) {
+      hasInitializedRef.current = true;
+      setIsEditing(true);
+    }
+  }, [data.isNew]);
 
   const handleDoubleClick = (e) => {
     e.stopPropagation();
@@ -285,7 +288,8 @@ export const EditableMindmapNode = React.memo(EditableMindmapNodeComponent, (pre
     p.borderColor === n.borderColor &&
     p.backgroundColor === n.backgroundColor &&
     p.isRootNode === n.isRootNode &&
-    p.oldLabel === n.oldLabel
+    p.oldLabel === n.oldLabel &&
+    p.isNew === n.isNew
   );
 });
 
@@ -336,9 +340,21 @@ export function MindmapBoardContent({ rawData, setMindmapData, currentFileName, 
     return () => window.removeEventListener('reactflow-trigger-fitview', triggerFit);
   }, [fitView, setIsViewReady]);
 
+  const lastFileRef = useRef(null);
+
   // Beim Map-Wechsel automatisch hinzoomen
   useEffect(() => {
-    if (nodes.length > 0 && currentFileName) {
+    const rawNodeIds = rawData?.nodes?.map(n => n.id) || [];
+    
+    const isNewMapFullyLoaded = 
+      nodes.length > 0 && 
+      nodes.length === rawNodeIds.length && 
+      nodes.every(node => rawNodeIds.includes(node.id));
+
+    if (isNewMapFullyLoaded && currentFileName && lastFileRef.current !== currentFileName) {
+
+      lastFileRef.current = currentFileName;
+
       const timer = setTimeout(() => {
         fitView({ padding: 0.2, duration: 1000 });
       }, 50);
@@ -392,7 +408,8 @@ export function MindmapBoardContent({ rawData, setMindmapData, currentFileName, 
         borderColor: borderColor,
         backgroundColor: backgroundColor,
         status: node.status,
-        oldLabel: node.oldLabel
+        oldLabel: node.oldLabel,
+        isNew: node.isNew
       };
 
       return {
@@ -459,7 +476,8 @@ export function MindmapBoardContent({ rawData, setMindmapData, currentFileName, 
             currentNode.data.backgroundColor !== newNode.data.backgroundColor ||
             currentNode.data.status !== newNode.data.status ||
             currentNode.data.oldLabel !== newNode.data.oldLabel ||
-            currentNode.data.isRootNode !== newNode.data.isRootNode;
+            currentNode.data.isRootNode !== newNode.data.isRootNode ||
+            currentNode.data.isNew !== newNode.data.isNew;
 
           const selectedChanged = currentNode.selected !== newNode.selected;
           const typeChanged = currentNode.type !== newNode.type;
@@ -673,7 +691,6 @@ export function MindmapBoardContent({ rawData, setMindmapData, currentFileName, 
       if (!resizeIntervalRef.current) {
         resizeIntervalRef.current = setInterval(() => {
           targetNodeIds.forEach(id => updateNodeInternals(id));
-          console.log("intervall");
         }, 40);
       }
       return;
@@ -859,7 +876,6 @@ export const MindmapBoard = React.memo(function MindmapBoard(props){
   if (prevProps.setMindmapData !== nextProps.setMindmapData) return false;
   if (prevProps.currentFileName !== nextProps.currentFileName) return false;
   if (prevProps.positions !== nextProps.positions) return false;
-  if (prevProps.justCreatedNodeId !== nextProps.justCreatedNodeId) return false;
   if (prevProps.onNodesSelect !== nextProps.onNodesSelect) return false;
   if (prevProps.isEdgeSelectMode !== nextProps.isEdgeSelectMode) return false;
   if (prevProps.setIsEdgeSelectMode !== nextProps.setIsEdgeSelectMode) return false;
