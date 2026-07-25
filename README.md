@@ -22,6 +22,6 @@
 
 ## Feedback
 
-[Fehler melden](https://github.com/schwanniii/KI-Mindmap/issues) - [Feature vorschlagen](https://github.com/schwanniii/KI-Mindmap/issues)
+[Fehler melden](https://github.com/jannis-buesing/KI-Mindmap/issues) - [Feature vorschlagen](https://github.com/jannis-buesing/KI-Mindmap/issues)
 
 </div>
