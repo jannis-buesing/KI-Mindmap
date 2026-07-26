@@ -34,7 +34,12 @@ function EditableMindmapNodeComponent({ id, data, isConnectable, selected }) {
       requestAnimationFrame(() => {
         if (inputRef.current) {
           inputRef.current.focus();
-          inputRef.current.select();
+
+          setTimeout(() => {
+            if (inputRef.current) {
+              inputRef.current.select();
+            }
+          }, 20);
         }
       });
     }
@@ -57,9 +62,19 @@ const hasInitializedRef = useRef(false);
 
   const saveChange = () => {
     setIsEditing(false);
-    if (value.trim() !== '' && value !== data.label) {
+    
+    // Wir prüfen, ob sich der Text ODER die Höhe geändert hat
+    const hasTextChanged = value.trim() !== '' && value !== data.label;
+    const hasHeightChanged = measuredHeight !== data.height;
+
+    if (hasTextChanged || hasHeightChanged) {
       window.dispatchEvent(new CustomEvent('reactflow-live-label', {
-        detail: { nodeId: id, value: value }
+        detail: { 
+          nodeId: id, 
+          value: value,
+          // Wir übergeben die gemessene Höhe an das Parent-Board
+          height: measuredHeight 
+        }
       }));
     } else {
       setValue(data.label || '');
@@ -89,6 +104,8 @@ const hasInitializedRef = useRef(false);
   const nodeRef = useRef(null);
   const resizeHandleRef = useRef(null);
 
+  const updateNodeInternals = useUpdateNodeInternals();
+
   useEffect(() => {
     if (!nodeRef.current) return;
 
@@ -105,10 +122,12 @@ const hasInitializedRef = useRef(false);
     }
 
     const totalRawHeight = textHeight + 24;
-
     const snappedHeight = Math.max(Math.ceil(totalRawHeight / 30) * 30, 60);
+    
     setMeasuredHeight(snappedHeight);
-  }, [data.label, value, isEditing, currentWidth]);
+
+    updateNodeInternals(id);
+  }, [data.label, value, isEditing, currentWidth, id, updateNodeInternals]);
 
   const calculateWidthLimits = () => {
     if (!nodeRef.current) return { min: 150, max: 600 };
@@ -222,6 +241,12 @@ const hasInitializedRef = useRef(false);
     selected ? 'node-selected' : ''
   ].filter(Boolean).join(' ');
 
+  const dynamicZIndex = useMemo(() => {
+    if (selected || isHovered) return 100; // Wer aktiv genutzt wird, steht GANZ oben
+    if (isProposal) return 10;            // Proposals stehen über normalen Knoten
+    return 1;                             // Normale Knoten bilden die Basis
+  }, [selected, isHovered, isProposal]);
+
   // ================================================= RETURN ==============================================
 
   return (
@@ -235,12 +260,13 @@ const hasInitializedRef = useRef(false);
       onMouseLeave={() => setIsHovered(false)}
       style={{
         width: `${data.width || currentWidth}px`,
-        height: `${data.height || measuredHeight}px`,
+        height: `${isEditing ? measuredHeight : Math.max(data.height || 0, measuredHeight)}px`,
         background: backgroundColor,
         borderWidth: '2px',
         borderStyle: 'solid',
         borderColor: borderColor,
         cursor: isEditing ? 'text' : 'grab',
+        zIndex: dynamicZIndex,
         '--node-default-border': data.borderColor || 'var(--default-node-border)'
       }}
     >
@@ -260,9 +286,23 @@ const hasInitializedRef = useRef(false);
           <div style={{ fontSize: '10px', textDecoration: 'line-through', opacity: 0.5, marginBottom: '2px' }}>{data.oldLabel}</div>
         )}
         {isEditing ? (
-          <textarea ref={inputRef} className='nodrag node-textarea' value={value} onChange={(e) => setValue(e.target.value)} onKeyDown={handleKeyDown} onBlur={handleBlur} rows={1} />
+          <textarea 
+            ref={inputRef} 
+            className='nodrag node-textarea' 
+            value={value} 
+            onChange={(e) => {
+              setValue(e.target.value);
+              e.target.style.height = 'auto';
+              e.target.style.height = `${e.target.scrollHeight}px`;
+            }} 
+            onKeyDown={handleKeyDown} 
+            onBlur={handleBlur} 
+            rows={1} 
+          />
         ) : (
-          <div className={`node-label ${data.status === 'deleted' ? 'node-deleted-label' : ''}`}>{data.label}</div>
+          <div className={`node-label ${data.status === 'deleted' ? 'node-deleted-label' : ''}`}>
+            {data.label !== value && value.trim() !== '' ? value : data.label}
+          </div>
         )}
       </div>
       <div ref={resizeHandleRef} onMouseDown={startResizing} className="nodrag node-resize-handle" style={{ zIndex: 1 }}/>
@@ -295,7 +335,19 @@ export const EditableMindmapNode = React.memo(EditableMindmapNodeComponent, (pre
 
 EditableMindmapNode.displayName = 'EditableMindmapNode';
 
-export function MindmapBoardContent({ rawData, setMindmapData, currentFileName, positions, onNodesSelect, selectedNodeIds = [], isEdgeSelectMode, setIsEdgeSelectMode, isViewReady, setIsViewReady }) {
+export function MindmapBoardContent({
+  rawData,
+  setMindmapData,
+  currentFileName,
+  currentMapId,
+  positions,
+  onNodesSelect,
+  selectedNodeIds = [],
+  isEdgeSelectMode,
+  setIsEdgeSelectMode,
+  isViewReady,
+  setIsViewReady
+}) {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const { getNodes, screenToFlowPosition, fitView } = useReactFlow();
@@ -375,26 +427,27 @@ export function MindmapBoardContent({ rawData, setMindmapData, currentFileName, 
       let borderColor = node.borderColor;
       let backgroundColor = node.backgroundColor;
 
-      // Fallback: Wenn keine benutzerdefinierte Farbe gesetzt ist, nutzen wir die Status-Farbe
       if (!borderColor) {
         if (node.status === 'updated') {
-          borderColor = '#eedf59';
-          backgroundColor = 'rgba(243, 246, 59, 0.15)';
+          borderColor = 'var(--status-updated, #eab308)'; 
         } else if (node.status === 'deleted') {
-          borderColor = '#ef4444';
-          backgroundColor = 'rgba(239, 68, 68, 0.15)';
+          borderColor = 'var(--status-deleted, #ef4444)';
         } else if (node.status === 'added') {
-          borderColor = '#22c55e';
-          backgroundColor = 'rgba(34, 197, 94, 0.15)';
+          borderColor = 'var(--status-added, #22c55e)';
         } else {
           borderColor = 'var(--default-node-border)';
         }
       }
 
-      if (!backgroundColor) {
+      // DIE ZENTRALE STELLE FÜR DIE HINTERGRUNDFARBE
+      if (node.status) {
+        // Proposals: Wir mischen die jeweilige Rahmenfarbe mit 15% Deckkraft transparent
+        backgroundColor = `color-mix(in srgb, ${borderColor} 15%, transparent)`;
+      } else {
+        // Normale Knoten: Deckend mit dem App-Hintergrund gemischt
         backgroundColor = borderColor !== 'var(--default-node-border)'
-          ? `${borderColor}40`
-          : `color-mix(in srgb, var(--default-node-border) 25%, transparent)`;
+          ? `color-mix(in srgb, ${borderColor} 25%, var(--bg))`
+          : `color-mix(in srgb, var(--default-node-border) 25%, var(--bg))`;
       }
 
       const alignedWidth = Math.round((node.width || 210) / 30) * 30;
@@ -724,6 +777,12 @@ export function MindmapBoardContent({ rawData, setMindmapData, currentFileName, 
     });
   }, [setNodes, setMindmapData, updateNodeInternals]);
 
+  const handleDefaultViewportMoveEnd = useCallback((event, viewport) => {
+    if (!currentMapId) return;
+    
+    localStorage.setItem('current_mindmap_viewport', JSON.stringify(viewport));
+  }, [currentMapId]);
+
   useEffect(() => {
     window.addEventListener("nodeResize", handleNodeResize);
     return () => window.removeEventListener("nodeResize", handleNodeResize);
@@ -745,10 +804,25 @@ export function MindmapBoardContent({ rawData, setMindmapData, currentFileName, 
         if (nodeIds && nodeIds.includes(node.id)) {
           if (field === 'label') return { ...node, data: { ...node.data, label: value } };
           if (field === 'borderColor') return { ...node, style: { ...node.style, borderColor: value } };
+          
+          // NEU: Verarbeitet das Höhen-Update für React Flow
+          if (field === 'height') {
+            return { 
+              ...node, 
+              // 1. Die Höhe auf der obersten Ebene für das Layout/Canvas
+              height: value, 
+              data: { 
+                ...node.data, 
+                // 2. Im data-Objekt spiegeln, damit data.height im Inline-Style greift
+                height: value 
+              } 
+            };
+          }
         }
         return node;
       }));
     };
+    
     window.addEventListener('reactflow-update-nodes-data', handleUpdateNodesData);
     return () => {
       window.removeEventListener('reactflow-update-nodes-data', handleUpdateNodesData);
@@ -763,12 +837,39 @@ export function MindmapBoardContent({ rawData, setMindmapData, currentFileName, 
     return () => window.removeEventListener('reactflow-get-all-nodes', handleGetAllNodes);
   }, [getNodes]);
 
-
-  // ============================================
   const displayEdges = useMemo(() => edges.map((e) => ({
     ...e,
     selectable: isEdgeSelectMode, 
   })), [edges, isEdgeSelectMode]);
+
+  const defaultViewport = useMemo(() => {
+    if (!currentMapId) return { x: 0, y: 0, zoom: 1 };
+
+    // 1. Versuchen, den gespeicherten Viewport für diese spezifische Mindmap zu laden
+    const savedViewport = localStorage.getItem('current_mindmap_viewport');
+    if (savedViewport) {
+      try {
+        return JSON.parse(savedViewport);
+      } catch (e) {
+        console.error("Fehler beim Parsen des Viewports", e);
+      }
+    }
+
+    // 2. Fallback: Perfekte Zentrierung (falls kein Viewport existiert)
+    const container = document.querySelector('.react-flow');
+    if (container) {
+      const rect = container.getBoundingClientRect();
+      return { x: rect.width / 2 - 105, y: rect.height / 2 - 22.5, zoom: 1 };
+    }
+    
+    const estimatedSidebarWidth = 300;
+    return {
+      x: estimatedSidebarWidth + ((window.innerWidth - estimatedSidebarWidth) / 2) - 105,
+      y: window.innerHeight / 2 - 22.5,
+      zoom: 1
+    };
+  }, [currentMapId]);
+
   // ==================================================== RETURN =========================================================
 
   return (
@@ -826,6 +927,8 @@ export function MindmapBoardContent({ rawData, setMindmapData, currentFileName, 
           onSelectionEnd={handleSelectionEnd}
           snapToGrid={true} 
           snapGrid={[15, 15]}
+          defaultViewport={defaultViewport}
+          onMoveEnd={handleDefaultViewportMoveEnd}
           fitView={false}
           selectNodesOnDrag={true}
           nodesDraggable={!isEdgeSelectMode}

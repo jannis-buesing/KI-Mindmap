@@ -1,67 +1,62 @@
 import { useState, useEffect, useRef, memo } from 'react';
 import { SendHorizontal, Paperclip } from 'lucide-react';
 
-// Node Indicator Badge Start
-  export const NodeIndicatorBadge = ({ count, isEdgeSelectMode }) => {
-    if (count === 0) return null;
-    if (isEdgeSelectMode) return;
+// Node Indicator Badge bleibt unverändert...
+export const NodeIndicatorBadge = ({ count, isEdgeSelectMode }) => {
+  if (count === 0) return null;
+  if (isEdgeSelectMode) return;
 
-    // 1. Dynamischer Titel für grammatikalische Korrektheiten
-    const titleText = count === 1
-        ? "1 ausgewählter Knoten wird als Kontext mitgesendet"
-        : `${count} ausgewählte Knoten werden als Kontext mitgesendet`;
+  const titleText = count === 1
+      ? "1 ausgewählter Knoten wird als Kontext mitgesendet"
+      : `${count} ausgewählte Knoten werden als Kontext mitgesendet`;
 
-    // 2. Text-Formatierung (z. B. "1000+" ab 1000 Knoten)
-    const displayCount = count >= 1000 ? "1000+" : count;
+  const displayCount = count >= 1000 ? "1000+" : count;
+  const digitCount = String(displayCount).length;
+  let badgeWidth = '42px';
+  
+  if (digitCount === 2) {
+      badgeWidth = '50px';
+  } else if (digitCount === 3) {
+      badgeWidth = '58px';
+  } else if (digitCount >= 4) {
+      badgeWidth = '72px';
+  }
 
-    // 3. Präzise Breitensteuerung je nach Ziffernlänge (1-stellig, 2-stellig, 3-stellig, 4-stellig/1000+)
-    const digitCount = String(displayCount).length;
-    let badgeWidth = '42px'; // Standard für 1-stellig
-    
-    if (digitCount === 2) {
-        badgeWidth = '50px';   // für 2-stellig
-    } else if (digitCount === 3) {
-        badgeWidth = '58px';   // für 3-stellig
-    } else if (digitCount >= 4) {
-        badgeWidth = '72px';   // für 4-stellig oder "1000+"
-    }
-
-    return (
-        <div 
-        title={titleText}
-        style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            height: '36px',
-            gap: '4px',
-            padding: '6px 0',          // Padding links/rechts auf 0, da die feste Breite den Platz vorgibt
-            width: badgeWidth,        // Dynamische Breite
-            borderRadius: '8px',
-            backgroundColor: 'var(--accent-bg)',
-            border: '1px solid var(--accent-border)',
-            color: 'var(--accent)',
-            fontSize: '12px',
-            fontWeight: '600',
-            userSelect: 'none',
-            transition: 'width 0.2s ease, background-color 0.2s ease',
-            cursor: 'default',
-            animation: 'fadeIn 0.2s ease-out',
-            boxSizing: 'border-box'
-        }}
-        >
-        <Paperclip size={14} style={{ flexShrink: 0 }} />
-        <span style={{ 
-            lineHeight: 1, 
-            textAlign: 'center',
-            fontVariantNumeric: 'tabular-nums'
-        }}>
-            {displayCount}
-        </span>
-        </div>
-    );
+  return (
+      <div 
+      title={titleText}
+      style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '36px',
+          gap: '4px',
+          padding: '6px 0',
+          width: badgeWidth,
+          borderRadius: '8px',
+          backgroundColor: 'var(--accent-bg)',
+          border: '1px solid var(--accent-border)',
+          color: 'var(--accent)',
+          fontSize: '12px',
+          fontWeight: '600',
+          userSelect: 'none',
+          transition: 'width 0.2s ease, background-color 0.2s ease',
+          cursor: 'default',
+          animation: 'fadeIn 0.2s ease-out',
+          boxSizing: 'border-box'
+      }}
+      >
+      <Paperclip size={14} style={{ flexShrink: 0 }} />
+      <span style={{ 
+          lineHeight: 1, 
+          textAlign: 'center',
+          fontVariantNumeric: 'tabular-nums'
+      }}>
+          {displayCount}
+      </span>
+      </div>
+  );
 };
-// Node Indicator Badge Ende
 
 function EingabeleisteComponent({
   loading,
@@ -80,11 +75,18 @@ function EingabeleisteComponent({
     if (e) e.preventDefault();
     if (!userInput.trim() || loading) return;
 
-    const fallbackText = userInput; // Text sichern
-    setUserInput('');               // Feld leeren
+    const fallbackText = userInput;
+    setUserInput('');
+    // Beim Absenden standardmäßig einklappen
+    setEingabeleisteIsExpanded(false);
 
     expandMindmap(userInput, () => {
       setUserInput(fallbackText);
+      // BEHOBEN TO-DO 2: Wenn die KI fehlschlägt und der Text zurückgesetzt wird,
+      // prüfen wir anhand der Textlänge oder Zeilenumbrüche, ob das große Layout erzwungen werden muss.
+      if (fallbackText.includes('\n') || fallbackText.length > 50) {
+        setEingabeleisteIsExpanded(true);
+      }
     });
   };
 
@@ -96,6 +98,10 @@ function EingabeleisteComponent({
         textarea.focus();
         const len = textarea.value.length;
         textarea.setSelectionRange(len, len);
+        
+        // Höhe direkt nach dem Fokus triggern, falls bereits Text (z.B. nach Fehler) existiert
+        textarea.style.height = 'auto';
+        textarea.style.height = `${Math.min(textarea.scrollHeight, 160)}px`;
       }
     } else {
       const input = inputRef.current;
@@ -130,10 +136,9 @@ function EingabeleisteComponent({
 
   const count = selectedNodeIds.length;
 
-// =============================================================== RETURN ==============================================================================
   return (
     <div style={{ margin: '18px 0 0 0', width: '100%' }}>
-      {/* HILFSELEMENT: Misst die Breite im Hintergrund */}
+      {/* HILFSELEMENT */}
       <span
         ref={spanRef}
         style={{
@@ -182,8 +187,16 @@ function EingabeleisteComponent({
             onChange={(e) => setUserInput(e.target.value)}
             disabled={loading}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && userInput.trim().length > 0 && !loading) {
-                handleSubmit();
+              if (e.key === 'Enter') {
+                if (e.shiftKey) {
+                  // BEHOBEN TO-DO 1: Shift + Enter im kleinen Layout klappt das Textfeld auf
+                  // und fügt direkt den Zeilenumbruch hinzu.
+                  e.preventDefault();
+                  setUserInput(prev => prev + '\n');
+                  setEingabeleisteIsExpanded(true);
+                } else if (userInput.trim().length > 0 && !loading) {
+                  handleSubmit();
+                }
               }
             }}
             style={{
@@ -198,7 +211,6 @@ function EingabeleisteComponent({
             }}
           />
           
-          {/* Badge links neben dem Senden-Button */}
           <NodeIndicatorBadge count={count} isEdgeSelectMode={isEdgeSelectMode} />
 
           <button
@@ -221,9 +233,7 @@ function EingabeleisteComponent({
               userSelect: 'none'
             }}
           >
-            {loading ? (
-              'Denke nach...'
-            ) : (
+            {loading ? 'Denke nach...' : (
               <>
                 <span>Senden</span>
                 <SendHorizontal size={16} />
@@ -277,7 +287,6 @@ function EingabeleisteComponent({
                   e.preventDefault();
                   if (userInput.trim().length > 0 && !loading) {
                     handleSubmit();
-                    setEingabeleisteIsExpanded(false);
                   }
                 }
               }}
@@ -324,15 +333,11 @@ function EingabeleisteComponent({
               )}
             </div>
             
-            {/* Flex-Container rechts gruppiert Badge + Button */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <NodeIndicatorBadge count={count} isEdgeSelectMode={isEdgeSelectMode} />
               
               <button
-                onClick={() => {
-                  handleSubmit();
-                  setEingabeleisteIsExpanded(false);
-                }}
+                onClick={handleSubmit}
                 disabled={loading || userInput.trim().length === 0}
                 style={{
                   padding: '8px 14px',
@@ -350,9 +355,7 @@ function EingabeleisteComponent({
                   transition: 'all 0.2s'
                 }}
               >
-                {loading ? (
-                  'Denke nach...'
-                ) : (
+                {loading ? 'Denke nach...' : (
                   <>
                     <span>Senden</span>
                     <SendHorizontal size={15} />

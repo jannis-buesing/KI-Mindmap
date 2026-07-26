@@ -4,7 +4,7 @@
 
 [im Browser öffnen →](https://ki-mindmap.vercel.app/)
 
-  <img src="./assets/KI_Mindmap.gif" alt="Anwendungsvorschau" width="100%">
+  <img src="/public/KI_Mindmap.gif" alt="Anwendungsvorschau" width="100%">
 </div>
 
 <br>

@@ -3,7 +3,7 @@ import { PanelLeftClose, PanelLeftOpen, Settings, Info, Palette, Moon, Sun, Rota
 import { HexColorPicker } from "react-colorful";
 import TypewriterBox from "./TypeWriterBox";
 
-function MeasuredVirtualList({ items, itemHeight, renderItem }) {
+function MeasuredVirtualList({ items, itemHeight, renderItem, currentMap, maps, editingName }) {
   const containerRef = useRef(null);
   const [containerHeight, setContainerHeight] = useState(400);
   const [scrollTop, setScrollTop] = useState(0);
@@ -92,7 +92,11 @@ function SidebarLeftComponent({
   const [activeMenu, setActiveMenu] = useState(null);
   const [editingName, setEditingName] = useState(null);
   const [tempName, setTempName] = useState("");
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(() => {
+    const isOpen = localStorage.getItem('isOpen');
+    if (isOpen === null) return true;
+    return isOpen === 'true';
+  });
   const [activePopup, setActivePopup] = useState(null); // 'info' | 'settings' | null
   const activePopupRef = useRef(null);
   const Hinweissätze = [
@@ -121,6 +125,10 @@ function SidebarLeftComponent({
   const handleButtonClick = (type) => {
     setActivePopup(activePopup === type ? null : type);
   };
+
+  useEffect(() => {
+    localStorage.setItem('isOpen', isOpen);
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOverlayOpen && activePopup && activePopupRef.current) {
@@ -256,14 +264,25 @@ function SidebarLeftComponent({
           {isOpen && (
             <MeasuredVirtualList
               items={maps}
-              itemHeight={56}
+              itemHeight={55}
+              currentMap={currentMap}
+              maps={maps}
               renderItem={(map) => {
                 const isCurrentMap = currentMap === map.id;
 
                 return (
                   <div
                     className="btn_mappedMindmaps"
+                    tabIndex={0}
                     onClick={() => !isCurrentMap && onSelectMap(map.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === "F2" && !editingName) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setEditingName(map.id);
+                        setTempName(map.name);
+                      }
+                    }}
                     style={{
                       padding: "0 10px",
                       height: "48px",
@@ -279,6 +298,7 @@ function SidebarLeftComponent({
                       justifyContent: "space-between",
                       alignItems: "center",
                       boxSizing: "border-box",
+                      outline: 'none'
                     }}
                   >
                     {/* Namen ändern und speichern - Logik */}

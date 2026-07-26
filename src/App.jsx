@@ -73,6 +73,28 @@ function migrateTreeToFlat(data) {
   return migrated;
 }
 
+function getOrientedEdge(nodeIdA, nodeIdB, positions) {
+  const posA = positions[nodeIdA] || { x: 0, y: 0 };
+  const posB = positions[nodeIdB] || { x: 0, y: 0 };
+
+  // Der Knoten, der weiter links steht (kleineres X), wird immer die SOURCE (Ausgang links -> rechts)
+  // Steht NodeB weiter links als NodeA, drehen wir die Richtung um.
+  if (posB.x < posA.x) {
+    return {
+      id: `e-${nodeIdB}-${nodeIdA}`,
+      source: nodeIdB,
+      target: nodeIdA
+    };
+  }
+
+  // Standard-Ausrichtung: NodeA ist links (Source), NodeB ist rechts (Target)
+  return {
+    id: `e-${nodeIdA}-${nodeIdB}`,
+    source: nodeIdA,
+    target: nodeIdB
+  };
+}
+
 function App() {
   const [dirHandle, setDirHandle] = useState(null);
   const [hasPermission, setHasPermission] = useState(false);
@@ -91,7 +113,11 @@ function App() {
     const savedColors = localStorage.getItem('user_picked_accent_colors');
     return savedColors ? JSON.parse(savedColors) : { light: '#b385d8', dark: '#c084fc' };
   });
-  const [confirmDelete, setConfirmDelete] = useState(true);
+  const [confirmDelete, setConfirmDelete] = useState(() => {
+    const confirmDelete = localStorage.getItem('confirmDelete');
+    if (confirmDelete === null) return true;
+    return confirmDelete === 'true';
+  });
   const [showOverlay, setShowOverlay] = useState(null); // 'copy'
   const [copyMapData, setCopyMapData] = useState(null);
   const [isEdgeSelectMode, setIsEdgeSelectMode] = useState(false);
@@ -102,6 +128,22 @@ function App() {
   const undoStack = useRef([]);
   const redoStack = useRef([]);
   const previousStateRef = useRef(null);
+
+  const isSwitchingMapRef = useRef(false);
+
+  // Für das temporäre Erstellen einer Mindmap
+  const [currentMapId, setCurrentMapId] = useState(() => {
+    return localStorage.getItem('current_mindmap_id') || '';
+  });
+
+  // Effekt: Jedes Mal wenn sich die ID ändert, in localStorage schreiben
+  useEffect(() => {
+    if (currentMapId) {
+      localStorage.getItem('current_mindmap_id', currentMapId);
+    } else {
+      localStorage.removeItem('current_mindmap_id');
+    }
+  }, [currentMapId]);
 
   // Helfer für tiefe Kopien des Zustands
   const cloneState = (data) => (data ? JSON.parse(JSON.stringify(data)) : null);
@@ -119,7 +161,31 @@ function App() {
   };
 
   // Akzentfarbe ändern
-  const [isDark, setIsDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches);
+  const [isDark, setIsDark] = useState(() => {
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme !== null) {
+      return JSON.parse(savedTheme); // Macht aus dem String "false" wieder das originale false
+    }
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
+
+  useEffect(() => {
+    // 1. Suche das Meta-Tag für die Browserfarbe
+    let metaThemeColor = document.querySelector('meta[name="theme-color"]');
+    if (!metaThemeColor) {
+      metaThemeColor = document.createElement('meta');
+      metaThemeColor.setAttribute('name', 'theme-color');
+      document.head.appendChild(metaThemeColor);
+    }
+
+    // 2. Setze die Farbe passend zu deinem Dark- und Light-Mode Hintergrund
+    metaThemeColor.setAttribute('content', isDark ? '#1e1e1e' : '#ffffff');
+    
+    // 3. Ergänzung: color-scheme direkt per JS auf das HTML-Element spiegeln, 
+    // falls du keine globalen CSS-Klassen nutzt
+    document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
+
+  }, [isDark]);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
@@ -159,6 +225,14 @@ function App() {
   }, [userApiKey]);
 
   useEffect(() => {
+    localStorage.setItem('confirmDelete', confirmDelete);
+  }, [confirmDelete]);
+
+  useEffect(() => {
+    localStorage.setItem('theme', JSON.stringify(isDark));
+  }, [isDark]);
+
+  useEffect(() => {
     return () => {
       if (labelDebounceRef.current) clearTimeout(labelDebounceRef.current);
     };
@@ -173,10 +247,64 @@ function App() {
       
       if (status === 'granted') {
         const files = await loadMindmapsFromDirectory(savedHandle);
-        
         setDirHandle(savedHandle);
         setHasPermission(true);
         setMapsList(files);
+
+        // 1. Prüfen, ob eine ID im localStorage gemerkt wurde
+        const savedMapId = localStorage.getItem('current_mindmap_id');
+        if (savedMapId) {
+          
+          // Fall A: Es war eine noch ungespeicherte, temporäre Map
+          if (savedMapId.startsWith('temp_')) {
+            const localData = localStorage.getItem(`temp_map_data_${savedMapId}`);
+            if (localData) {
+              undoStack.current = [];
+              redoStack.current = [];
+              previousStateRef.current = null;
+              isInitialLoad.current = true;
+              
+              setMindmapData(JSON.parse(localData));
+              setCurrentMapId(savedMapId);
+              setIsSaved(true);
+              return;
+            }
+          }
+          
+          // Fall B: Es ist eine bereits existierende, echte Map auf der Festplatte
+          const foundMap = files.find(m => m.id === savedMapId);
+          if (foundMap) {
+            try {
+              // Datei direkt aus dem Dateisystem laden
+              const fileHandle = await savedHandle.getFileHandle(`${foundMap.name}.json`);
+              const file = await fileHandle.getFile();
+              const text = await file.text();
+              let parsedData = JSON.parse(text);
+              
+              let dataToLoad = parsedData;
+              if (parsedData.rootNode || !parsedData.nodes) {
+                dataToLoad = migrateTreeToFlat(parsedData);
+              }
+              
+              // Stacks zurücksetzen wie beim normalen Klick
+              undoStack.current = [];
+              redoStack.current = [];
+              previousStateRef.current = null;
+              isInitialLoad.current = true;
+
+              // States setzen -> Damit öffnet sich die Map!
+              setCurrentMapId(savedMapId);
+              setMindmapData(dataToLoad);
+              setIsSaved(true);
+            } catch (error) {
+              console.error("Fehler beim automatischen Laden der Mindmap nach Reload:", error);
+              // Falls die Datei gelöscht wurde: Spuren im LocalStorage verwischen
+              localStorage.removeItem('current_mindmap_id');
+            }
+          }
+        }
+        // Wenn keine ID da ist (oder sie nicht gefunden wurde), bleibt der 
+        // Startbildschirm ("Wähle eine Mindmap aus") automatisch aktiv.
       } else {
         setDirHandle(savedHandle);
         setHasPermission(false);
@@ -204,120 +332,182 @@ function App() {
     }
   }, [dirHandle, hasPermission]);
 
-  const handleCreateMap = useCallback(async () => {
-    if (!dirHandle) return;
+const handleCreateMap = useCallback(() => {
+  if (!dirHandle) return;
 
-    setIsViewReady(false);
+  setIsViewReady(false);
 
-    const uniqueId = `${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-    const defaultName = 'Meine Mindmap...';
-    const initialData = {
-      id: uniqueId,
-      name: defaultName,
-      _currentFileName: '',
-      date: Date.now(),
-      nodes: [{
-        id: 'root',
-        label: defaultName,
-        isRootNode: true
-      }],
-      edges: [],
-      positions: {
-        'root': { x: 0, y: 0 }
-      } 
-    };
-    await saveMindmapToFile(dirHandle, defaultName, initialData, false);
-    const files = await loadMindmapsFromDirectory(dirHandle);
-    setMapsList(files);
-    const fileInfo = files.find(f => f.id === uniqueId);
-    
-    // Stacks & Status-Tracker leeren bei neuer Map
-    undoStack.current = [];
-    redoStack.current = [];
-    previousStateRef.current = null;
-    isInitialLoad.current = true;
+  const uniqueId = `temp_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+  const defaultName = 'Meine Mindmap';
+  const initialData = {
+    id: uniqueId,
+    name: defaultName,
+    _currentFileName: defaultName,
+    date: Date.now(),
+    nodes: [{
+      id: 'root',
+      label: 'Meine Mindmap...',
+      isRootNode: true
+    }],
+    edges: [],
+    positions: {
+      'root': { x: 0, y: 0 }
+    } 
+  };
+  
+  // Stacks & Status-Tracker leeren
+  undoStack.current = [];
+  redoStack.current = [];
+  previousStateRef.current = null;
+  isInitialLoad.current = true;
 
-    setMindmapData({ ...initialData, _currentFileName: fileInfo?.name || defaultName });
-    setIsSaved(true);
+  // Im State setzen
+  setCurrentMapId(uniqueId);
+  setMindmapData(initialData);
+  setIsSaved(true);
 
-    setTimeout(() => {
-      window.dispatchEvent(new CustomEvent('reactflow-trigger-fitview'));
-    }, 100);
-  }, [dirHandle]);
+  // Backup für Page-Reload im localStorage sichern
+  localStorage.setItem(`temp_map_data_${uniqueId}`, JSON.stringify(initialData));
+  localStorage.setItem('current_mindmap_id', uniqueId);
 
-  const handleSelectMap = useCallback(async (id) => {
-    if (!dirHandle || !hasPermission) return;
-    const foundMap = mapsList.find(m => m.id === id);
-    if(!foundMap) return;
-    const fileHandle = await dirHandle.getFileHandle(`${foundMap.name}.json`);
-    const file = await fileHandle.getFile();
-    const text = await file.text();
-    const parsedData = JSON.parse(text);
-    let dataToLoad = parsedData;
-    if (dataToLoad.rootNode || !dataToLoad.nodes) {
-      dataToLoad = migrateTreeToFlat(dataToLoad);
-    }
-    
-    // Stacks & Status-Tracker leeren bei Map-Wechsel
-    undoStack.current = [];
-    redoStack.current = [];
-    previousStateRef.current = null;
-    isInitialLoad.current = true;
+  setTimeout(() => {
+    window.dispatchEvent(new CustomEvent('reactflow-trigger-fitview'));
+  }, 100);
+}, [dirHandle]);
 
-    setMindmapData(dataToLoad);
-    setIsSaved(true);
-  }, [dirHandle, hasPermission, mapsList]);
+const handleSelectMap = useCallback(async (id) => {
+  if (!dirHandle || !hasPermission) return;
+  const foundMap = mapsList.find(m => m.id === id);
+  if (!foundMap) return;
+  
+  // WARNUNG: Wenn wir in einer temporären Map sind und die KI arbeitet (loading === true)
+  if (currentMapId && currentMapId.startsWith('temp_') && loading) {
+    const confirmLeave = window.confirm(
+      "Deine KI-Generierung läuft noch. Wenn du diese temporäre Mindmap jetzt verlässt, wird sie unwiderruflich gelöscht. Möchtest du trotzdem fortfahren?"
+    );
+    if (!confirmLeave) return; // Abbrechen, der Nutzer bleibt auf der temporären Map
+  }
+
+  // Falls wir von einer temporären Map wegwechseln, löschen wir deren LocalStorage-Reste
+  if (currentMapId && currentMapId.startsWith('temp_')) {
+    localStorage.removeItem(`temp_map_data_${currentMapId}`);
+  }
+
+  const fileHandle = await dirHandle.getFileHandle(`${foundMap.name}.json`);
+  const file = await fileHandle.getFile();
+  const text = await file.text();
+  let parsedData = JSON.parse(text);
+  
+  let dataToLoad = parsedData;
+  if (parsedData.rootNode || !parsedData.nodes) {
+    dataToLoad = migrateTreeToFlat(parsedData);
+  }
+  
+  undoStack.current = [];
+  redoStack.current = [];
+  previousStateRef.current = cloneState(dataToLoad);
+
+  isSwitchingMapRef.current = true;
+  isInitialLoad.current = false;
+
+  localStorage.setItem('current_mindmap_id', id);
+
+  setCurrentMapId(id);
+  setMindmapData(dataToLoad);
+  setIsSaved(true);
+}, [dirHandle, hasPermission, mapsList, currentMapId, loading]);
 
   // Auto-Save & Zentraler Checkpoint-Effekt
   useEffect(() => {
-    if (!dirHandle || !hasPermission || !mindmapData?.id) return;
-    
-    if (isInitialLoad.current) { 
-      isInitialLoad.current = false; 
-      previousStateRef.current = cloneState(mindmapData);
+  if (!dirHandle || !hasPermission || !mindmapData?.id) return;
+  
+  const isDifferentMap = previousStateRef.current && previousStateRef.current.id !== mindmapData.id;
 
-      return; 
-    }
-    if (isRenamingRef.current) { 
-      isRenamingRef.current = false; 
-      previousStateRef.current = cloneState(mindmapData);
-
-      return; 
-    }
-    
-    if (previousStateRef.current && previousStateRef.current.id === mindmapData.id) {
-      const oldStructure = getStructuralSnapshot(previousStateRef.current);
-      const newStructure = getStructuralSnapshot(mindmapData);
-
-      if (JSON.stringify(oldStructure) !== JSON.stringify(newStructure)) {
-        undoStack.current.push(cloneState(previousStateRef.current));
-        redoStack.current = [];
-      }
-    }
-
+  if (isSwitchingMapRef.current || isDifferentMap) {
+    isSwitchingMapRef.current = false;
     previousStateRef.current = cloneState(mindmapData);
+    setIsSaved(true);
+    return;
+  }
 
-    setIsSaved(false);
-    const delayDebounce = setTimeout(async () => {
-      const dataToSave = {
-        ...mindmapData,
-        nodes: mindmapData.nodes.map(({ isNew, ...node }) => node)
-      };
+  // 2. Fallback für den allerersten Start der App
+  if (isInitialLoad.current) { 
+    isInitialLoad.current = false; 
+    previousStateRef.current = cloneState(mindmapData);
+    setIsSaved(true);
+    return; 
+  }
 
-      // await saveMindmapToFile(dirHandle, mindmapData.name, mindmapData, false);
-      await saveMindmapToFile(dirHandle, mindmapData.name, dataToSave, false);
+  if (isRenamingRef.current) { 
+    isRenamingRef.current = false; 
+    previousStateRef.current = cloneState(mindmapData);
+    return; 
+  }
+  
+  // Erkennung von strukturellen Änderungen
+  let structureChanged = false;
+  if (previousStateRef.current && previousStateRef.current.id === mindmapData.id) {
+    const oldStructure = getStructuralSnapshot(previousStateRef.current);
+    const newStructure = getStructuralSnapshot(mindmapData);
+
+    if (JSON.stringify(oldStructure) !== JSON.stringify(newStructure)) {
+      undoStack.current.push(cloneState(previousStateRef.current));
+      redoStack.current = [];
+      structureChanged = true;
+    }
+  }
+
+  previousStateRef.current = cloneState(mindmapData);
+
+  // Wenn es eine temporäre Map ist, sichern wir sie bei jeder Änderung im LocalStorage für Reloads
+  if (mindmapData.id.startsWith('temp_')) {
+    localStorage.setItem(`temp_map_data_${mindmapData.id}`, JSON.stringify(mindmapData));
+  }
+
+  // Auto-Save-Verzögerung
+  setIsSaved(false);
+  const delayDebounce = setTimeout(async () => {
+    let currentDataToSave = { ...mindmapData };
+    
+    // WICHTIG: Wenn eine Änderung an einer temporären Map vorgenommen wurde,
+    // machen wir sie JETZT zu einer permanenten, echten Mindmap!
+    if (mindmapData.id.startsWith('temp_') && structureChanged) {
+      const realUniqueId = `${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+      
+      currentDataToSave.id = realUniqueId;
+      
+      // LocalStorage Reste säubern
+      localStorage.removeItem(`temp_map_data_${mindmapData.id}`);
+      localStorage.setItem('current_mindmap_id', realUniqueId);
+      
+      // States synchronisieren
+      setCurrentMapId(realUniqueId);
+      setMindmapData(prev => prev ? { ...prev, id: realUniqueId } : null);
+    }
+
+    // Wenn es immer noch temporär ist und keine Änderung vorliegt, nicht auf Platte schreiben!
+    if (currentDataToSave.id.startsWith('temp_')) {
       setIsSaved(true);
-      const files = await loadMindmapsFromDirectory(dirHandle);
-      setMapsList(files);
-    }, 800);
+      return;
+    }
 
-    // console.log("undo: ", undoStack.current.length, ", redo: ", redoStack.current.length, ", previousStateRef: ", previousStateRef );
+    const dataToSave = {
+      ...currentDataToSave,
+      nodes: currentDataToSave.nodes.map(({ isNew, ...node }) => node)
+    };
 
-    return () => clearTimeout(delayDebounce);
-  }, [mindmapData, dirHandle, hasPermission]);
+    await saveMindmapToFile(dirHandle, currentDataToSave.name, dataToSave, false);
+    setIsSaved(true);
+    
+    const files = await loadMindmapsFromDirectory(dirHandle);
+    setMapsList(files);
+  }, 800);
+
+  return () => clearTimeout(delayDebounce);
+}, [mindmapData, dirHandle, hasPermission]);
 
   // Undo / Redo Ausführungs-Logik
-  const executeUndo = useCallback(() => {
+const executeUndo = useCallback(() => {
     if (undoStack.current.length === 0) return;
     
     const previousState = undoStack.current.pop();
@@ -327,7 +517,12 @@ function App() {
     setMindmapData((currentLiveState) => {
       if (!currentLiveState) return currentLiveState;
       
-      redoStack.current.push(cloneState(currentLiveState));
+      //isNew nicht mitspeichern
+      const cleanedCurrentState = cloneState(currentLiveState);
+      if (cleanedCurrentState.nodes) {
+        cleanedCurrentState.nodes = cleanedCurrentState.nodes.map(({ isNew, ...node }) => node);
+      }
+      redoStack.current.push(cleanedCurrentState);
       
       return previousState;
     });
@@ -343,7 +538,12 @@ function App() {
     setMindmapData((currentLiveState) => {
       if (!currentLiveState) return currentLiveState;
 
-      undoStack.current.push(cloneState(currentLiveState));
+      //isNew nicht mitspeichern
+      const cleanedCurrentState = cloneState(currentLiveState);
+      if (cleanedCurrentState.nodes) {
+        cleanedCurrentState.nodes = cleanedCurrentState.nodes.map(({ isNew, ...node }) => node);
+      }
+      undoStack.current.push(cleanedCurrentState);
 
       return nextState;
     });
@@ -466,36 +666,62 @@ function App() {
   }, []);
 
   async function expandMindmap(userInput, onFailure) {
-    if (!mindmapData?.name) { alert("Bitte wähle oder erstelle zuerst eine Mindmap in der linken Leiste!"); return; }
+    if (!mindmapData?.name) { 
+      alert("Bitte wähle oder erstelle zuerst eine Mindmap in der linken Leiste!"); 
+      return; 
+    }
+
+    // 1. Kontext zum Zeitpunkt des Abschickens einfrieren
+    const targetMapId = mindmapData.id;
+    const targetMapName = mindmapData.name;
+    const currentNodesAtStart = [...mindmapData.nodes];
+    const currentEdgesAtStart = [...mindmapData.edges];
+    const currentPositionsAtStart = { ...mindmapData.positions };
 
     undoStack.current.push(cloneState(mindmapData));
     redoStack.current = [];
 
-    const targetMapId = mindmapData.id;
     setLoading(true);
     try {
+      const currentToken = localStorage.getItem('mindmap_cooldown_token');
+
       const res = await fetch('/api/expandMindmap', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          nodes: mindmapData.nodes, edges: mindmapData.edges, selectedNodeIds: selectedNodeIds,
-          userInput: userInput, userApiKey: userApiKey.trim()
+          nodes: currentNodesAtStart,
+          edges: currentEdgesAtStart,
+          positions: currentPositionsAtStart,
+          selectedNodeIds: selectedNodeIds,
+          userInput: userInput,
+          userApiKey: userApiKey.trim(),
+          cooldownToken: currentToken
         })
       });
+
       const responseText = await res.text();
       let data;
-      try { data = responseText ? JSON.parse(responseText) : {}; } catch (e) { throw new Error(`Ungültige Serverantwort (kein JSON): ${responseText.substring(0, 100)}...`); }
+      try { 
+        data = responseText ? JSON.parse(responseText) : {}; 
+      } catch (e) { 
+        throw new Error(`Ungültige Serverantwort (kein JSON): ${responseText.substring(0, 100)}...`); 
+      }
+
+      if (data.newToken || data._newToken) {
+        localStorage.setItem('mindmap_cooldown_token', data.newToken || data._newToken);
+      }
+      
       if (!res.ok) throw new Error(data.error || `Serverfehler (${res.status}): ${res.statusText}`);
+      
       const operations = data.operations || [];
-      setMindmapData(prev => {
-        if (!prev || prev.id !== targetMapId) return prev;
-        let newNodes = [...(prev.nodes || [])];
-        let newEdges = [...(prev.edges || [])];
-        const newPositions = { ...(prev.positions || {}) };
 
-        // Anzeige in Map berechnen Start
+      // 2. Reine Berechnungsfunktion, entkoppelt vom Live-State
+      const calculateNewState = (oldNodes, oldEdges, oldPositions) => {
+        let newNodes = [...oldNodes];
+        let newEdges = [...oldEdges];
+        const newPositions = { ...oldPositions };
+
         const addedOps = operations.filter(op => op.type === 'added');
-
         const addedCountsPerParent = {};
         const uniqueParents = [];
 
@@ -518,6 +744,7 @@ function App() {
         operations.forEach(op => {
           if (op.type === 'added') {
             const parentPos = newPositions[op.parentId] || { x: 0, y: 0 };
+            const rootPos = newPositions['root'] || { x: 0, y: 0 };
             const gridSize = 15;
             
             if (currentSiblingIndexPerParent[op.parentId] === undefined) {
@@ -527,31 +754,28 @@ function App() {
             currentSiblingIndexPerParent[op.parentId]++;
 
             const totalNodesForThisParent = addedCountsPerParent[op.parentId];
-            const totalDifferentParents = uniqueParents.length;
-            const parentOrderIndex = uniqueParents.indexOf(op.parentId);
-
-            const siblingSpacingX = 165; 
-            const baseOffsetY = 150;
-
             const indexOffset = currentIdx - (totalNodesForThisParent - 1) / 2;
-            let offsetX = indexOffset * siblingSpacingX;
+            
+            const goLeft = parentPos.x < rootPos.x || (op.parentId === 'root' && currentIdx % 2 === 0);
+            
+            let newPos;
+            if (op.x !== undefined && op.y !== undefined) {
+              newPos = {
+                x: Math.round(op.x / gridSize) * gridSize,
+                y: Math.round(op.y / gridSize) * gridSize
+              };
+            } else {
+              const siblingSpacingX = 240;
+              let offsetX = goLeft ? -siblingSpacingX : siblingSpacingX;
+              const offsetY = indexOffset * 80;
 
-            if (totalDifferentParents > 1) {
-              const parentOffsetDirection = parentOrderIndex - (totalDifferentParents - 1) / 2;
-              offsetX += parentOffsetDirection * 120; 
+              newPos = {
+                x: Math.round((parentPos.x + offsetX) / gridSize) * gridSize,
+                y: Math.round((parentPos.y + offsetY) / gridSize) * gridSize
+              };
             }
 
-            const vCurveEffect = Math.abs(indexOffset) * 30;
-            const offsetY = Math.max(90, baseOffsetY - vCurveEffect);
-            // Anzeige in Map berechnen Ende
-    
-            const newPos = {
-              x: Math.round((parentPos.x + offsetX) / gridSize) * gridSize,
-              y: Math.round((parentPos.y + offsetY) / gridSize) * gridSize
-            };
-            
             newNodes.push({ id: op.temporaryId, label: op.label, status: 'added' });
-            newEdges.push({ id: `e-${op.parentId}-${op.temporaryId}`, source: op.parentId, target: op.temporaryId });
             newPositions[op.temporaryId] = newPos;
             
             requestAnimationFrame(() => {
@@ -559,15 +783,156 @@ function App() {
                 window.dispatchEvent(new CustomEvent('reactflow-node-created', { detail: { nodeId: op.temporaryId } }));
               });
             });
+
           } else if (op.type === 'updated') {
-            newNodes = newNodes.map(node => node.id === op.nodeId ? { ...node, status: 'updated', oldLabel: node.label, label: op.label } : node);
+            if (op.x !== undefined && op.y !== undefined) {
+              const gridSize = 15;
+              newPositions[op.nodeId] = {
+                x: Math.round(op.x / gridSize) * gridSize,
+                y: Math.round(op.y / gridSize) * gridSize
+              };
+            }
+            
+            const existingNode = oldNodes.find(n => n.id === op.nodeId);
+            const isTextChange = existingNode && op.label && op.label !== existingNode.label;
+
+            if (isTextChange) {
+              newNodes = newNodes.map(node => 
+                node.id === op.nodeId 
+                  ? { ...node, status: 'updated', oldLabel: node.label, label: op.label } 
+                  : node
+              );
+            } else {
+              newNodes = newNodes.map(node => 
+                node.id === op.nodeId && op.label 
+                  ? { ...node, status: 'updated', label: op.label } 
+                  : node
+              );
+            }
           } else if (op.type === 'deleted') {
             newNodes = newNodes.map(node => (node.id === op.nodeId && node.id !== 'root') ? { ...node, status: 'deleted' } : node);
           }
         });
-        return { ...prev, nodes: newNodes, edges: newEdges, positions: newPositions };
+
+        if (data.edgesToDelete && Array.isArray(data.edgesToDelete)) {
+          newEdges = newEdges.filter(edge => 
+            !data.edgesToDelete.some(delEdge =>
+              (delEdge.source === edge.source && delEdge.target === edge.target) ||
+              (delEdge.source === edge.target && delEdge.target === edge.source)
+            )
+          );
+        }
+
+        operations.forEach(op => {
+          if (op.type === 'added') {
+            const oriented = getOrientedEdge(op.parentId, op.temporaryId, newPositions);
+            const exists = newEdges.some(e => 
+              e.id === oriented.id || 
+              (e.source === oriented.source && e.target === oriented.target) ||
+              (e.source === oriented.target && e.target === oriented.source)
+            );
+            if (!exists) {
+              newEdges.push(oriented);
+            }
+          }
+        });
+
+        // 2. Kanten aus 'edgesToAdd' hinzufügen mit identischer Duplikat-Prüfung
+        if (data.edgesToAdd && Array.isArray(data.edgesToAdd)) {
+          data.edgesToAdd.forEach(edgeOp => {
+            const oriented = getOrientedEdge(edgeOp.source, edgeOp.target, newPositions);
+            const exists = newEdges.some(e => 
+              e.id === oriented.id || 
+              (e.source === oriented.source && e.target === oriented.target) ||
+              (e.source === oriented.target && e.target === oriented.source)
+            );
+            if (!exists) {
+              newEdges.push(oriented);
+            }
+          });
+        }
+
+        newEdges = newEdges.map(edge => {
+          const oriented = getOrientedEdge(edge.source, edge.target, newPositions);
+          if (edge.id !== oriented.id) {
+            return {
+              ...edge,
+              id: oriented.id,
+              source: oriented.source,
+              target: oriented.target
+            };
+          }
+          return edge;
+        });
+
+        return { nodes: newNodes, edges: newEdges, positions: newPositions };
+      };
+
+      // 3. Neue Struktur berechnen
+      const updatedStructures = calculateNewState(currentNodesAtStart, currentEdgesAtStart, currentPositionsAtStart);
+
+      // 4. Wir nutzen direkt den aktuellen State (prev) für die Entscheidung
+      let mapWasChanged = false;
+
+      setMindmapData(prev => {
+        if (!prev) return prev;
+        
+        if (prev.id === targetMapId) {
+          return {
+            ...prev,
+            ...updatedStructures
+          };
+        } else {
+          mapWasChanged = true; 
+          return prev; 
+        }
       });
-      setMapsList(prevList => prevList.map(map => map.id === targetMapId ? { ...map, date: Date.now() } : map));
+
+      // 5. AUSWERTUNG
+      if (!mapWasChanged) {
+        // FALL A: Nutzer ist auf der Map geblieben
+        setMapsList(prevList => prevList.map(map => map.id === targetMapId ? { ...map, date: Date.now() } : map));
+        
+        const dataToSave = {
+          ...mindmapData,
+          ...updatedStructures,
+          date: Date.now(),
+          nodes: updatedStructures.nodes.map(({ isNew, ...node }) => node) // isNew entfernen
+        };
+
+        // Direktes Schreiben auf die Festplatte ohne Umweg über den 800ms-Timer
+        saveMindmapToFile(dirHandle, targetMapName, dataToSave, false);
+        setIsSaved(true);
+
+      } else {
+        // FALL B: Nutzer hat die Map gewechselt
+        if (dirHandle && hasPermission) {
+          try {
+            const actualOldMap = mapsList.find(map => map.id === targetMapId);
+            const correctName = actualOldMap ? actualOldMap.name : targetMapName;
+
+            const fileHandle = await dirHandle.getFileHandle(`${correctName}.json`);
+            const file = await fileHandle.getFile();
+            const text = await file.text();
+            const originalMapData = JSON.parse(text);
+
+            const dataToSave = {
+              ...originalMapData,
+              ...updatedStructures,
+              date: Date.now(),
+              nodes: updatedStructures.nodes.map(({ isNew, ...node }) => node)
+            };
+
+            await saveMindmapToFile(dirHandle, correctName, dataToSave, false);
+            
+            const files = await loadMindmapsFromDirectory(dirHandle);
+            setMapsList(files);
+          } catch (fileError) {
+            console.error("Fehler beim nachträglichen Speichern der Hintergrund-Map:", fileError);
+          }
+        }
+      }
+
       setLoading(false);
     } catch (error) {
       console.error("Fehler beim Erweitern der Mindmap:", error);
@@ -678,11 +1043,13 @@ function App() {
     });
   }, []);
 
-  const handleUpdateSelectedNodes = useCallback((field, value, targetNodeId = null) => {
+const handleUpdateSelectedNodes = useCallback((field, value, targetNodeId = null) => {
+    // 1. Custom Event für die Live-Anzeige / React Flow UI feuern
     window.dispatchEvent(new CustomEvent('reactflow-update-nodes-data', {
       detail: { nodeIds: targetNodeId ? [targetNodeId] : selectedNodeIds, field, value }
     }));
 
+    // 2. Persistenten Mindmap-State aktualisieren
     if (field === 'label') {
       if (labelDebounceRef.current) clearTimeout(labelDebounceRef.current);
 
@@ -698,13 +1065,19 @@ function App() {
         });
       }, 300);
     } else {
+      // Behandelt borderColor, height und andere Node-Eigenschaften direkt
       setMindmapData((prev) => {
         if (!prev) return prev;
         const newNodes = (prev.nodes || []).map(node => {
           const match = targetNodeId ? node.id === targetNodeId : selectedNodeIds.includes(node.id);
           if (match) {
             const updatedNode = { ...node };
+            
             if (field === 'borderColor') updatedNode.borderColor = value;
+            
+            // NEU: Zuweisung der dynamischen Höhe an das persistente Node-Objekt
+            if (field === 'height') updatedNode.height = value; 
+            
             return updatedNode;
           }
           return node;
@@ -732,7 +1105,7 @@ function App() {
         dirName={dirHandle?.name}
         onSelectDir={handleSelectDirectory}
         maps={mapsList}
-        currentMap={mindmapData?.id || ''}
+        currentMap={currentMapId}
         onSelectMap={handleSelectMap}
         onDeleteMap={handleDeleteMap}
         onRenameMap={handleRenameMap}
@@ -760,6 +1133,7 @@ function App() {
             rawData={mindmapData}
             setMindmapData={setMindmapData}
             currentFileName={mindmapData?._currentFileName}
+            currentMapId={currentMapId}
             positions={mindmapData.positions} 
             onNodesSelect={setSelectedNodeIds}
             selectedNodeIds={selectedNodeIds}

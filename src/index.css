@@ -10,6 +10,11 @@
   --default-node-border: #cfcfcf;
   --edgeDelete: #e47f7f;
 
+  /* Proposals:  */
+  --status-updated: #eedf59; /* Klassisches Gelb */
+  --status-deleted: #ef4444; /* Klassisches Rot */
+  --status-added: #22c55e;   /* Klassisches Grün */
+
   --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
   --mono: ui-monospace, Consolas, monospace;
 
@@ -32,6 +37,11 @@
     --accent-border: rgba(192, 132, 252, 0.5);
     --default-node-border: #3f3f3f;
     --edgeDelete: #e47f7f;
+
+    /* Proposals:  */
+    --status-updated: #fde047; /* Helleres, leuchtenderes Gelb für dunkle Hintergründe */
+    --status-deleted: #f87171; /* Helleres, weicheres Rot */
+    --status-added: #4ade80;
   }
 }
 
@@ -46,6 +56,11 @@ html[data-theme="dark"] {
   --accent-border: rgba(192, 132, 252, 0.5);
   --default-node-border: #3f3f3f;
   --edgeDelete: #e47f7f;
+
+  /* Proposals:  */
+  --status-updated: #fde047; /* Helleres, leuchtenderes Gelb für dunkle Hintergründe */
+  --status-deleted: #f87171; /* Helleres, weicheres Rot */
+  --status-added: #4ade80;
 }
 
 body {
@@ -492,6 +507,7 @@ code {
 .react-flow__edge.selected .react-flow__edge-path {
   stroke-width: 4 !important;
   stroke: var(--edgeDelete) !important;
+  stroke-dasharray: 5.5px;
 }
 
 .hide-node-selection .editable-mindmap-node {
