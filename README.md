@@ -2,7 +2,7 @@
 
 # KI Mindmap
 
-[im Browser öffnen →](https://ki-mindmap.vercel.app/)
+## [im Browser öffnen →](https://ki-mindmap.vercel.app/)
 
   <img src="/public/KI_Mindmap.gif" alt="Anwendungsvorschau" width="100%">
 </div>
@@ -12,16 +12,16 @@
 
 ## Funktionen
 
-* **Funktion 1:** Beschreibung der ersten Kernfunktionalität.
-* **Funktion 2:** Beschreibung der zweiten Kernfunktionalität.
-* **Funktion 3:** Beschreibung der dritten Kernfunktionalität.
-* **Funktion 4:** Beschreibung der vierten Kernfunktionalität.
+* **KI-Erweiterung:** Erweitere die Mindmap mit Hilfe von Google Gemini.
+* **lokales Speichern:** Die Mindmaps werden lokal auf der Festplatte gespeichert. Kein Cloud-Speicher.
+* **Akzentfarbe ändern:** Passe die Akzentfarbe nach Deiner Vorliebe frei an.
+* **Anordnung am Raster:** Die Knoten richten sich am Raster aus und passen ihre Größe daran an.
   
   ---
 <div align="center">
 
-## Support
+## Feedback
 
-[Fehler melden](https://github.com/DEIN-BENUTZERNAME/DEIN-REPO/issues) - [Feature vorschlagen](https://github.com/DEIN-BENUTZERNAME/DEIN-REPO/issues)
+[Fehler melden](https://github.com/jannis-buesing/KI-Mindmap/issues) - [Feature vorschlagen](https://github.com/jannis-buesing/KI-Mindmap/issues)
 
 </div>
