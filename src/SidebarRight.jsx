@@ -141,18 +141,24 @@ function SidebarRightComponent({
     <div
       onMouseEnter={() => setSBRisHovered(true)}
       onMouseLeave={() => setSBRisHovered(false)}
+      className="sidebar-right-responsive"
       style={{
+        // Desktop-Grundmaße via State, mobil per CSS-Klasse überschrieben
         width: isOpen ? "200px" : "20px",
         maxWidth: isOpen ? "200px" : "20px",
+        
+        // KORREKTUR: Verhindert die "gläserne Wand". Wenn geschlossen, ist die Höhe fixiert.
+        height: window.innerWidth <= 380 ? (isOpen ? "auto" : "20px") : "100%",
+        
+        position: "relative",
         background: "var(--code-bg)",
         borderLeft: "1px solid var(--border)",
         display: "flex",
         flexDirection: "column",
-        flex: "1 0 auto",
+        flex: isOpen ? "1 0 auto" : "0 0 auto",
         padding: isOpen ? "16px" : "0",
         boxSizing: "border-box",
-        transition: "width 0.3s cubic-bezier(0.25, 1, 0.5, 1), padding 0.3s ease",
-        position: "relative",
+        transition: "width 0.3s cubic-bezier(0.25, 1, 0.5, 1), height 0.3s cubic-bezier(0.25, 1, 0.5, 1), padding 0.3s ease",
         overflow: "hidden",
       }}
     >
@@ -345,17 +351,18 @@ function SidebarRightComponent({
       {/* INDIKATOR WENN GESCHLOSSEN */}
       {!isOpen && (
         <div
+          className="sidebar-indicator-responsive" /* Verknüpfung zur CSS-Medienabfrage */
           style={{
             position: "absolute",
             top: "20px",
-            bottom: "20px",
             left: "50%",
             transform: "translateX(-50%)",
             width: "2px",
+            height: "calc(100% - 40px)",
             background: SBRisHovered ? "var(--accent)" : "var(--border)",
             borderRadius: "2px",
             opacity: SBRisHovered ? 1 : 0.6,
-            transition: "background 0.2s ease, opacity 0.2s ease",
+            transition: "background 0.2s ease, opacity 0.2s ease, top 0.3s, left 0.3s, transform 0.3s, width 0.3s, height 0.3s",
             pointerEvents: "none",
           }}
         />

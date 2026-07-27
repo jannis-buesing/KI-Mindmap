@@ -40,7 +40,7 @@ export default function Overlay({ type, onClose, nodes, mindmapData }) {
     previewNodes.push("...");
   }
 
-  const mapName = mindmapData?.name || "Unbenannte Mindmap";
+  const mapName = mindmapData?._currentFileName || "Unbenannte Mindmap";
 
   const jsonNodesPreview = (nodes || []).slice(0, 5).map((realNode, i) => {
     const rawLabel = realNode.data?.label || realNode.label || `Knoten ${i + 1}`;
@@ -80,7 +80,7 @@ export default function Overlay({ type, onClose, nodes, mindmapData }) {
   // Das Objekt in einen formatierten String umwandeln
   let jsonPreviewString = JSON.stringify(
     {
-      name: mapName,
+      _currentFileName: mapName,
       nodes: jsonNodesPreview,
     },
     null,

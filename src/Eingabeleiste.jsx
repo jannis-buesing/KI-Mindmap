@@ -4,7 +4,7 @@ import { SendHorizontal, Paperclip } from 'lucide-react';
 // Node Indicator Badge bleibt unverändert...
 export const NodeIndicatorBadge = ({ count, isEdgeSelectMode }) => {
   if (count === 0) return null;
-  if (isEdgeSelectMode) return;
+  if (isEdgeSelectMode) return null; // Korrigiert von 'return;' zu 'return null;' für sauberes JSX
 
   const titleText = count === 1
       ? "1 ausgewählter Knoten wird als Kontext mitgesendet"
@@ -67,9 +67,19 @@ function EingabeleisteComponent({
 }) {
   const [eingabeleisteIsExpanded, setEingabeleisteIsExpanded] = useState(false);
   const [userInput, setUserInput] = useState('');
+  const [isMobile, setIsMobile] = useState(false); // Mobile-Erkennung für Layout-Wechsel
   const inputRef = useRef(null);
   const textareaRef = useRef(null);
   const spanRef = useRef(null);
+
+  // Mobile-Erkennung aktivieren
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 768px)');
+    setIsMobile(media.matches);
+    const listener = (e) => setIsMobile(e.matches);
+    media.addEventListener('change', listener);
+    return () => media.removeEventListener('change', listener);
+  }, []);
 
   const handleSubmit = (e) => {
     if (e) e.preventDefault();
@@ -77,20 +87,16 @@ function EingabeleisteComponent({
 
     const fallbackText = userInput;
     setUserInput('');
-    // Beim Absenden standardmäßig einklappen
     setEingabeleisteIsExpanded(false);
 
     expandMindmap(userInput, () => {
       setUserInput(fallbackText);
-      // BEHOBEN TO-DO 2: Wenn die KI fehlschlägt und der Text zurückgesetzt wird,
-      // prüfen wir anhand der Textlänge oder Zeilenumbrüche, ob das große Layout erzwungen werden muss.
       if (fallbackText.includes('\n') || fallbackText.length > 50) {
         setEingabeleisteIsExpanded(true);
       }
     });
   };
 
-  // 1. Fokus & Cursor-Position beim Wechsel steuern
   useEffect(() => {
     if (eingabeleisteIsExpanded) {
       const textarea = textareaRef.current;
@@ -98,8 +104,6 @@ function EingabeleisteComponent({
         textarea.focus();
         const len = textarea.value.length;
         textarea.setSelectionRange(len, len);
-        
-        // Höhe direkt nach dem Fokus triggern, falls bereits Text (z.B. nach Fehler) existiert
         textarea.style.height = 'auto';
         textarea.style.height = `${Math.min(textarea.scrollHeight, 160)}px`;
       }
@@ -113,7 +117,6 @@ function EingabeleisteComponent({
     }
   }, [eingabeleisteIsExpanded]);
 
-  // 2. Performance-optimierte Messung ohne Layout-Thrashing
   useEffect(() => {
     if (!eingabeleisteIsExpanded && userInput) {
       const animationFrame = requestAnimationFrame(() => {
@@ -132,12 +135,32 @@ function EingabeleisteComponent({
     }
   }, [userInput, eingabeleisteIsExpanded]);
 
-  if (!mindmapData?.name) return null;
+  if (!mindmapData?._currentFileName) return null;
 
   const count = selectedNodeIds.length;
 
+  // Dynamische Styles für den Container (Desktop vs. Handy)
+ const containerStyle = {
+  display: "flex",
+  alignItems: "center",
+  gap: "8px",
+  width: "100%",
+  padding: "8px 12px",
+  background: "var(--bg)", // Nutzt das Haupt-Background-Token der Popups
+  border: "1px solid var(--border)",
+  borderRadius: "6px", // Konsistent mit den Buttons (z.B. .btn_mappedMindmaps)
+  boxSizing: "border-box",
+  transition: "border-color 0.2s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.2s ease",
+  
+  // Optional: Visuelles Feedback, wenn in das integrierte Input-Feld geklickt wird
+  "&:focusWithin": {
+    borderColor: "var(--accent)",
+    boxShadow: "0 0 0 1px var(--accent-border)",
+  }
+};
+
   return (
-    <div style={{ margin: '18px 0 0 0', width: '100%' }}>
+    <div style={containerStyle}>
       {/* HILFSELEMENT */}
       <span
         ref={spanRef}
@@ -189,8 +212,6 @@ function EingabeleisteComponent({
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 if (e.shiftKey) {
-                  // BEHOBEN TO-DO 1: Shift + Enter im kleinen Layout klappt das Textfeld auf
-                  // und fügt direkt den Zeilenumbruch hinzu.
                   e.preventDefault();
                   setUserInput(prev => prev + '\n');
                   setEingabeleisteIsExpanded(true);

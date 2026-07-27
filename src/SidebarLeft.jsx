@@ -143,13 +143,14 @@ function SidebarLeftComponent({
     }));
   };
 
-  const btn_ordnerWechselnBigId = dirName ? 'btn_ordnerWechselnBigNoHasPermission' : 'btn_ordnerWechselnBigNoDirName';
+  const btn_ordnerWechselnBig = dirName ? 'btn_ordnerWechselnBigNoHasPermission' : 'btn_ordnerWechselnBigNoDirName';
 
   // =================================================================== RETURN ============================================
   return (
     <div
       style={{
         width: isOpen ? "300px" : "60px",
+        height: "100dvh", // Nutzt die dynamische Handy-Höhe inklusive Abzug der Browser-Leisten
         background: "var(--code-bg)",
         borderRight: "1px solid var(--border)",
         display: "flex",
@@ -158,8 +159,12 @@ function SidebarLeftComponent({
         maxWidth: "25vw",
         minWidth: isOpen ? "225px" : "60px",
         padding: isOpen ? "20px" : "14px",
+        paddingBottom: isOpen 
+          ? "calc(20px + env(safe-area-inset-bottom))" 
+          : "calc(14px + env(safe-area-inset-bottom))", // Schützt die Icons vor virtuellen Home-Bars
         boxSizing: "border-box",
         transition: "width 0.3s cubic-bezier(0.25, 1, 0.5, 1)",
+        zIndex: 100
       }}
     >
       <div
@@ -183,7 +188,7 @@ function SidebarLeftComponent({
         {/* DYNAMISCHER BUTTON: Wechselt den Text je nach Zustand */}
         { isOpen && (!dirName || !hasPermission) && (
           <button
-            id={btn_ordnerWechselnBigId}
+            className={btn_ordnerWechselnBig}
             onClick={onSelectDir}
             style={{
               display: "block",
@@ -204,6 +209,43 @@ function SidebarLeftComponent({
           </button>
         )}
       {/* Ordner Auswahl Ende */}
+
+      {/* Ordner Auswahl für !isOpen Start */}
+      {!isOpen && !dirName && (
+        <button
+          className="btn_32pxNormed btn_ordnerWechselnBigNoDirName"
+          id="btn_sbl_file_connect"
+          onClick={onSelectDir}
+          title="Lokalen Ordner verbinden"
+          style={{
+            marginRight: 'auto',
+            background: activePopup === 'file' ? 'var(--accent)' : 'transparent',
+            color: "var(--text-h)",
+            border: "1px solid var(--accent)",
+          }}
+        >
+          <FolderOpen />
+        </button>
+      )}
+
+      {!isOpen && dirName && !hasPermission && (
+        <button
+          className="btn_32pxNormed btn_ordnerWechselnBigNoHasPermission"
+          id="btn_sbl_file_permission"
+          onClick={onSelectDir}
+          title="🔑 Berechtigung erteilen"
+          style={{
+            marginRight: 'auto',
+            background: "#eab308",
+            color: "#000",
+            border: "1px solid var(--border)",
+            fontWeight: "600"
+          }}
+        >
+          <FolderOpen />
+        </button>
+      )}
+      {/* Ordner Auswahl für !isOpen Ende */}
 
       {/* Die restliche Sidebar wird NUR angezeigt, wenn wir den Ordner UND die Erlaubnis haben */}
       {dirName && hasPermission ? (
@@ -280,7 +322,7 @@ function SidebarLeftComponent({
                         e.preventDefault();
                         e.stopPropagation();
                         setEditingName(map.id);
-                        setTempName(map.name);
+                        setTempName(map._currentFileName);
                       }
                     }}
                     style={{
@@ -347,7 +389,7 @@ function SidebarLeftComponent({
                             flex: 1,
                           }}
                         >
-                          {map.name}
+                          {map._currentFileName}
                         </span>
                       </span>
                     )}
@@ -405,7 +447,7 @@ function SidebarLeftComponent({
                           title="Umbenennen"
                           onClick={() => {
                             setEditingName(map.id);
-                            setTempName(map.name);
+                            setTempName(map._currentFileName);
                             setActiveMenu(null);
                           }}
                           className="btn_32pxNormed"
@@ -685,18 +727,18 @@ function SidebarLeftComponent({
               </div>
             )}
 
-            <button
-              className="btn_32pxNormed"
-              id="btn_sbl_file"
-              onClick={onSelectDir}
-              title="Ordnerpfad wechseln"
-              style={{
-                background: activePopup === 'file' ? 'var(--accent)' : '',
-                marginRight: 'auto'
-              }}
-            >
-              <FolderOpen/>
-            </button>
+              <button
+                className="btn_32pxNormed"
+                id="btn_sbl_file"
+                onClick={onSelectDir}
+                title="Ordnerpfad wechseln"
+                style={{
+                  background: activePopup === 'file' ? 'var(--accent)' : '',
+                  marginRight: 'auto'
+                }}
+              >
+                <FolderOpen/>
+              </button>
 
             <button
               className="btn_32pxNormed"
@@ -738,7 +780,8 @@ function SidebarLeftComponent({
             
           {/* Einstellungen Ende */}
         </>
-      ) : dirName && !hasPermission ? (
+      ) : isOpen ? (
+        dirName && !hasPermission && (
         <div
           style={{
             fontSize: "14px",
@@ -752,7 +795,8 @@ function SidebarLeftComponent({
           Der Ordner ist hinterlegt, aber Chrome benötigt deine Bestätigung, um
           auf die Dateien zuzugreifen. Klicke oben auf den gelben Button!
         </div>
-      ) : null}
+      )
+     ) : null}
     </div>
   );
 }

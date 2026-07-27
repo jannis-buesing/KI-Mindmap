@@ -18,6 +18,29 @@
   --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
   --mono: ui-monospace, Consolas, monospace;
 
+  --container-padding: 30px;
+  --header-padding: 0px;
+  --board-margin: 0px;
+  --board-radius: 12px;
+
+  /* SidebarRight Desktop-Standards */
+  --sbr-width: 20px;
+  --sbr-max-width: 20px;
+  --sbr-height: 100%;
+  --sbr-position: relative;
+  --sbr-top: auto;
+  --sbr-left: auto;
+  --sbr-border-left: 1px solid var(--border);
+  --sbr-border-bottom: none;
+  --sbr-flex: 1 0 auto;
+
+  /* Indikator Desktop (Vertikale Linie) */
+  --sbr-ind-top: 20px;
+  --sbr-ind-left: 50%;
+  --sbr-ind-transform: translateX(-50%);
+  --sbr-ind-width: 2px;
+  --sbr-ind-height: calc(100% - 40px);
+
   font: 18px/145% var(--sans);
   color: var(--text);
   background: var(--bg);
@@ -61,6 +84,44 @@ html[data-theme="dark"] {
   --status-updated: #fde047; /* Helleres, leuchtenderes Gelb für dunkle Hintergründe */
   --status-deleted: #f87171; /* Helleres, weicheres Rot */
   --status-added: #4ade80;
+}
+
+/* ALLGEMEIN AM HANDY (z.B. bis 768px) */
+@media (max-width: 768px) {
+  :root {
+    --container-padding: 0px; /* Eingabeleiste dockt nahtlos an */
+    --header-padding: 12px 12px 0 12px;
+    --board-margin: 6px; /* Gibt dem Mindmap-Board Raum zum Atmen */
+    --board-radius: 8px;
+  }
+}
+
+/* SPEZIELL FÜR APPS UNTER 380px (Sidebar wird zur horizontalen Top-Bar) */
+@media (max-width: 380px) {
+  :root {
+    --container-padding: 24px 0px 0px 0px; /* Schafft Platz für die geschlossene Top-Bar */
+  }
+
+  /* Direkte Steuerung der Sidebar-Klasse statt fehleranfälliger :root-Variablen */
+  .sidebar-right-responsive {
+    width: 100% !important;
+    max-width: 100% !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    border-left: none !important;
+    border-bottom: 1px solid var(--border) !important;
+    z-index: 1010 !important;
+  }
+
+  /* Indikator wird im mobilen Zustand zur zentrierten, flachen Pille */
+  .sidebar-indicator-responsive {
+    top: 9px !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    width: 40px !important;
+    height: 2px !important;
+  }
 }
 
 body {
@@ -119,13 +180,13 @@ code {
   transition: 0.1s;
 }
 
-#btn_ordnerWechselnBigNoHasPermission:hover {
+.btn_ordnerWechselnBigNoHasPermission:hover {
   background-color: #f3bc17 !important;
   border: 1px solid transparent !important;
   transition: 0.1s;
 }
 
-#btn_ordnerWechselnBigNoDirName:hover {
+.btn_ordnerWechselnBigNoDirName:hover {
   background-color: var(--border) !important;
   border: 1px solid var(--accent) !important;
   box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 30%, transparent) !important;
