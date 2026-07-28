@@ -292,37 +292,13 @@ return (
           }}
         >
           <button
+            id="btn_sbr_nodeDelete"
             onClick={onDeleteSelected}
-            style={{
-              flex: "1 1 0%",
-              minWidth: "0",
-              padding: "8px 10px",
-              borderRadius: "8px",
-              fontWeight: "600",
-              fontSize: "12px",
-              cursor: "pointer",
-              
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center", 
-
-              gap: "0px", 
-              
-              border: "1px solid",
-              borderColor: "var(--border)",
-              color: "var(--text)",
-              backgroundColor: "transparent",
-              whiteSpace: "nowrap"
-            }}
           >
-            <span style={{ 
-              display: "flex", 
-              alignItems: "center", 
-              justifyContent: "center",
-              flexShrink: 0, 
-              minWidth: "20px"
-            }}>
-              <Trash2 color="var(--delete)" size={14} />
+            <span 
+              id="span_sbr_Trash2"
+            >
+              <Trash2 size={14} />
             </span>
             <span 
               className="span_sbr_verbindungen_löschen"

@@ -542,6 +542,48 @@ code {
   transition: 0.1s ease !important;
 }
 
+#btn_sbr_nodeDelete {
+  flex: 1 1 0%;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+  
+  display: flex;
+  align-items: center;
+  justify-content: center; 
+  gap: 0px; 
+  
+  border: 1px solid var(--border);
+  color: var(--text);
+  background-color: transparent;
+  white-space: nowrap;
+
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+#btn_sbr_nodeDelete:hover {
+  background-color: #ffdcdc;
+  border-color: #ffeeee;
+  color: #000000 !important;
+  
+  transform: scale(1.01);
+  box-shadow: 0 2px 8px rgba(255, 190, 190, 0.25);
+}
+#span_sbr_Trash2 {
+  display: flex; 
+  align-items: center; 
+  justify-content: center;
+  flex-shrink: 0;
+  min-width: 20px;
+  color: var(--delete);
+  transition: color 0.15s ease;
+}
+#btn_sbr_nodeDelete:hover #span_sbr_Trash2 {
+  color: #000000;
+}
+
 /* =================== SideBarRight Ende ====================== */
 
 /* =================== Nodes in der Mindmap Start ======================= */
@@ -678,13 +720,11 @@ code {
   transition: stroke 0.15s ease, stroke-width 0.15s ease;
 }
 
-/* 2. Der verzögerte Hover-Effekt (Die Magie) */
 .react-flow__edge:hover .react-flow__edge-path {
   stroke-width: 4 !important;
   cursor: pointer;
 }
 
-/* 3. Zustand, wenn die Linie aktiv ausgewählt/angeklickt wurde */
 .react-flow__edge.selected .react-flow__edge-path {
   stroke-width: 4 !important;
   stroke: var(--delete) !important;
@@ -697,6 +737,14 @@ code {
 
 .react-flow__edge.selected:hover .react-flow__edge-path {
   stroke-width: 5 !important;
+}
+
+/* --- HINZUGEFÜGT: Die unsichtbare, breite Klickzone --- */
+.react-flow__edge-interaction {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 20px !important; /* Macht die Klickfläche 20px breit */
+  cursor: pointer;
 }
 
 /* ======================= Edges Ende ======================= */

@@ -15,6 +15,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Check, X } from 'lucide-react';
+import { ButtonEdge } from './CustomEdge';
 
 function EditableMindmapNodeComponent({ id, data, isConnectable, selected }) {
   const [isEditing, setIsEditing] = useState(false);
@@ -356,15 +357,19 @@ export function MindmapBoardContent({
 
   const updateNodeInternals = useUpdateNodeInternals();
 
-  const nodesRef = useRef(nodes);
-  useEffect(() => { nodesRef.current = nodes; }, [nodes]);
-
-  const onEdgesChangeCustom = useCallback((changes) => { onEdgesChange(changes); }, [onEdgesChange]);
-
   const nodeTypes = useMemo(() => ({
     default: EditableMindmapNode,
     proposalNode: EditableMindmapNode
   }), []);
+
+  const edgeTypes = useMemo(() => ({
+    buttonedge: ButtonEdge,
+  }), []); 
+
+  const nodesRef = useRef(nodes);
+  useEffect(() => { nodesRef.current = nodes; }, [nodes]);
+
+  const onEdgesChangeCustom = useCallback((changes) => { onEdgesChange(changes); }, [onEdgesChange]);
 
   useEffect(() => {
     const triggerFit = () => {
@@ -597,6 +602,9 @@ export function MindmapBoardContent({
         id: edgeId,
         source: connection.source,
         target: connection.target,
+        type: 'buttonedge',
+        focusable: true,
+        updatable: true
       };
 
       return {
@@ -886,14 +894,8 @@ export function MindmapBoardContent({
           proOptions={{ hideAttribution: true }}
           nodes={nodes}
           edges={edges}
-          onEdgeClick={(event, edge) => {
-            setEdges((eds) =>
-              eds.map((e) =>
-                e.id === edge.id ? { ...e, selected: !e.selected } : e
-              )
-            );
-          }}
           nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
           onConnect={onConnect}
           deleteKeyCode={['Backspace', 'Delete']}
           onEdgesDelete={handleEdgesDelete}
