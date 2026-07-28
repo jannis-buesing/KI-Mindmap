@@ -343,8 +343,6 @@ export function MindmapBoardContent({
   positions,
   onNodesSelect,
   selectedNodeIds = [],
-  isEdgeSelectMode,
-  setIsEdgeSelectMode,
   isViewReady,
   setIsViewReady
 }) {
@@ -367,12 +365,6 @@ export function MindmapBoardContent({
     default: EditableMindmapNode,
     proposalNode: EditableMindmapNode
   }), []);
-
-  useEffect(() => {
-    if (isEdgeSelectMode) {
-      setNodes((nds) => nds.map((node) => ({ ...node, selected: false })));
-    }
-  }, [isEdgeSelectMode, setNodes]);
 
   useEffect(() => {
     const triggerFit = () => {
@@ -614,32 +606,6 @@ export function MindmapBoardContent({
     });
   }, [setMindmapData]);
 
-  // Edges markieren mit Box
-  const handleSelectionEnd = useCallback(() => {
-    if (!isEdgeSelectMode) return;
-
-    const selectedNodeIds = getNodes()
-      .filter((node) => node.selected)
-      .map((node) => node.id);
-
-    if (selectedNodeIds.length > 0) {
-      setEdges((eds) =>
-        eds.map((edge) => {
-          if (selectedNodeIds.includes(edge.source) && selectedNodeIds.includes(edge.target)) {
-            return { ...edge, selected: true };
-          }
-          return edge;
-        })
-      );
-      
-      // Knoten sofort wieder abwählen
-      setNodes((nds) => nds.map((node) => ({ ...node, selected: false })));
-    }
-
-    // 2. Modus nach einmaligem Ziehen sofort wieder beenden
-    setIsEdgeSelectMode(false);
-  }, [isEdgeSelectMode, getNodes, setNodes, setEdges, setIsEdgeSelectMode]);
-
   const handleEdgesDelete = useCallback((deletedEdges) => {
     const edgeIds = deletedEdges.map(edge => edge.id);
     
@@ -841,11 +807,6 @@ export function MindmapBoardContent({
     return () => window.removeEventListener('reactflow-get-all-nodes', handleGetAllNodes);
   }, [getNodes]);
 
-  const displayEdges = useMemo(() => edges.map((e) => ({
-    ...e,
-    selectable: isEdgeSelectMode, 
-  })), [edges, isEdgeSelectMode]);
-
   const defaultViewport = useMemo(() => {
     if (!currentMapId) return { x: 0, y: 0, zoom: 1 };
 
@@ -904,7 +865,7 @@ export function MindmapBoardContent({
         
         marginBottom: 'var(--board-margin, 8px)',
         
-        outline: isEdgeSelectMode ? '1px solid var(--edgeDelete)' : '1px solid var(--border)',
+        outline: '1px solid var(--border)',
         borderRadius: '12px',
         overflow: 'hidden',
         userSelect: 'none',
@@ -922,18 +883,15 @@ export function MindmapBoardContent({
         style={{ flex: 1, height: '100%', width: '100%', position: 'relative' }}
       >
         <ReactFlow
-          className={isEdgeSelectMode ? 'hide-node-selection' : ''}
           proOptions={{ hideAttribution: true }}
           nodes={nodes}
-          edges={displayEdges}
+          edges={edges}
           onEdgeClick={(event, edge) => {
-            if (!isEdgeSelectMode) {
-              setEdges((eds) =>
-                eds.map((e) =>
-                  e.id === edge.id ? { ...e, selected: !e.selected } : e
-                )
-              );
-            }
+            setEdges((eds) =>
+              eds.map((e) =>
+                e.id === edge.id ? { ...e, selected: !e.selected } : e
+              )
+            );
           }}
           nodeTypes={nodeTypes}
           onConnect={onConnect}
@@ -943,14 +901,13 @@ export function MindmapBoardContent({
           onNodeDragStop={onNodeDragStopCustom}
           onEdgesChange={onEdgesChangeCustom}
           onSelectionChange={onSelectionChangeCustom}
-          onSelectionEnd={handleSelectionEnd}
           snapToGrid={true}
           snapGrid={[15, 15]}
           defaultViewport={defaultViewport}
           onMoveEnd={handleDefaultViewportMoveEnd}
           fitView={false}
           selectNodesOnDrag={true}
-          nodesDraggable={!isEdgeSelectMode}
+          nodesDraggable={true}
           panOnDrag={isMobile ? true : [2]}
 
           onPaneContextMenu={(e) => e.preventDefault()}
@@ -976,7 +933,7 @@ export function MindmapBoardContent({
             className="custom-minimap"
           />
         </ReactFlow>
-        {nodes.some(n => selectedNodeIds.includes(n.id) && !!n.data?.status) && !isEdgeSelectMode && (
+        {nodes.some(n => selectedNodeIds.includes(n.id) && !!n.data?.status) && (
           <div id='div_BulkDecisionParent' style={{ position: 'absolute', top: '0', left: '50%', transform: 'translate(-50%)', zIndex: 1000, background: 'var(--code-bg)', outline: '1px solid var(--border)', borderRadius: '12px', padding: '10px 24px', display: 'flex', flexDirection: 'column', gap: '6px', justifyContent: 'center', alignItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
             <span style={{ fontSize: '14px', color: 'var(--text)', whiteSpace: 'nowrap' }}>
               {nodes.filter(n => selectedNodeIds.includes(n.id) && !!n.data?.status).length === 1 ? 'Einen Vorschlag:' : `Alle ${nodes.filter(n => selectedNodeIds.includes(n.id) && !!n.data?.status).length} Vorschläge:`}
@@ -1008,8 +965,6 @@ export const MindmapBoard = React.memo(function MindmapBoard(props){
   if (prevProps.currentFileName !== nextProps.currentFileName) return false;
   if (prevProps.positions !== nextProps.positions) return false;
   if (prevProps.onNodesSelect !== nextProps.onNodesSelect) return false;
-  if (prevProps.isEdgeSelectMode !== nextProps.isEdgeSelectMode) return false;
-  if (prevProps.setIsEdgeSelectMode !== nextProps.setIsEdgeSelectMode) return false;
   if (prevProps.isViewReady !== nextProps.isViewReady) return false;
   if (prevProps.rawData !== nextProps.rawData) return false;
  

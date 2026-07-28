@@ -56,7 +56,7 @@
     --accent-bg: rgba(192, 132, 252, 0.15);
     --accent-border: rgba(192, 132, 252, 0.5);
     --default-node-border: #3f3f3f;
-    --edgeDelete: #e47f7f;
+    --delete: #e47f7f;
 
     /* Proposals:  */
     --status-updated: #fde047; /* Helleres, leuchtenderes Gelb für dunkle Hintergründe */
@@ -75,7 +75,7 @@ html[data-theme="light"] {
   --accent-bg: rgba(164, 115, 202, 0.1);
   --accent-border: rgba(170, 119, 209, 0.5);
   --default-node-border: #cfcfcf;
-  --edgeDelete: #e47f7f;
+  --delete: #e47f7f;
 
   /* Proposals:  */
   --status-updated: #eedf59; /* Klassisches Gelb */
@@ -93,7 +93,7 @@ html[data-theme="dark"] {
   --accent-bg: rgba(192, 132, 252, 0.15);
   --accent-border: rgba(192, 132, 252, 0.5);
   --default-node-border: #3f3f3f;
-  --edgeDelete: #e47f7f;
+  --delete: #e47f7f;
 
   /* Proposals:  */
   --status-updated: #fde047; /* Helleres, leuchtenderes Gelb für dunkle Hintergründe */
@@ -687,7 +687,7 @@ code {
 /* 3. Zustand, wenn die Linie aktiv ausgewählt/angeklickt wurde */
 .react-flow__edge.selected .react-flow__edge-path {
   stroke-width: 4 !important;
-  stroke: var(--edgeDelete) !important;
+  stroke: var(--delete) !important;
   stroke-dasharray: 5.5px;
 }
 

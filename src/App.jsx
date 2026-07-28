@@ -120,7 +120,6 @@ function App() {
   });
   const [showOverlay, setShowOverlay] = useState(null); // 'copy'
   const [copyMapData, setCopyMapData] = useState(null);
-  const [isEdgeSelectMode, setIsEdgeSelectMode] = useState(false);
   const labelDebounceRef = useRef(null);
   const [isViewReady, setIsViewReady] = useState(true);
   
@@ -1269,8 +1268,6 @@ return (
             positions={mindmapData.positions}
             onNodesSelect={setSelectedNodeIds}
             selectedNodeIds={selectedNodeIds}
-            isEdgeSelectMode={isEdgeSelectMode}
-            setIsEdgeSelectMode={setIsEdgeSelectMode}
             isViewReady={isViewReady}
             setIsViewReady={setIsViewReady}
           />
@@ -1288,15 +1285,12 @@ return (
           expandMindmap={expandMindmap}
           selectedNodeIds={selectedNodeIds}
           mindmapData={mindmapData}
-          isEdgeSelectMode={isEdgeSelectMode}
         />
       </div>
       <SidebarRight
         mindmapData={mindmapData}
         selectedNodeIds={selectedNodeIds}
         onUpdateNodes={handleUpdateSelectedNodes}
-        isEdgeSelectMode={isEdgeSelectMode}
-        setIsEdgeSelectMode={setIsEdgeSelectMode}
         onDeleteSelected={deleteSelectedNodes}
       />
       <Overlay

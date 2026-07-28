@@ -2,9 +2,8 @@ import { useState, useEffect, useRef, memo } from 'react';
 import { SendHorizontal, Paperclip } from 'lucide-react';
 
 // Node Indicator Badge bleibt unverändert...
-export const NodeIndicatorBadge = ({ count, isEdgeSelectMode }) => {
+export const NodeIndicatorBadge = ({ count }) => {
   if (count === 0) return null;
-  if (isEdgeSelectMode) return null; // Korrigiert von 'return;' zu 'return null;' für sauberes JSX
 
   const titleText = count === 1
       ? "1 ausgewählter Knoten wird als Kontext mitgesendet"
@@ -63,7 +62,6 @@ function EingabeleisteComponent({
   expandMindmap,
   selectedNodeIds,
   mindmapData,
-  isEdgeSelectMode
 }) {
   const [eingabeleisteIsExpanded, setEingabeleisteIsExpanded] = useState(false);
   const [userInput, setUserInput] = useState('');
@@ -198,7 +196,7 @@ function EingabeleisteComponent({
           <input
             ref={inputRef}
             type="text"
-            placeholder={ isEdgeSelectMode
+            placeholder={ false
               ? "Mindmap erweitern..."
               : selectedNodeIds.length > 1000
                 ? "1000+ Knoten bearbeiten..."
@@ -236,7 +234,7 @@ function EingabeleisteComponent({
             }}
           />
          
-          <NodeIndicatorBadge count={count} isEdgeSelectMode={isEdgeSelectMode} />
+          <NodeIndicatorBadge count={count} />
 
           <button
             onClick={handleSubmit}
@@ -359,7 +357,7 @@ function EingabeleisteComponent({
             </div>
            
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <NodeIndicatorBadge count={count} isEdgeSelectMode={isEdgeSelectMode} />
+              <NodeIndicatorBadge count={count} />
              
               <button
                 onClick={handleSubmit}

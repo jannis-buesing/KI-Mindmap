@@ -5,11 +5,9 @@ function SidebarRightComponent({
   mindmapData,
   selectedNodeIds = [],
   onUpdateNodes,
-  isEdgeSelectMode,
-  setIsEdgeSelectMode,
   onDeleteSelected
 }) {
-  const isOpen = selectedNodeIds.length > 0 && !isEdgeSelectMode;
+  const isOpen = selectedNodeIds.length > 0;
   const [SBRisHovered, setSBRisHovered] = useState(false);
   // const [verbindungenAuswählenIsHovered, setVerbindungenAuswählenIsHovered] = useState(false);
 
@@ -294,46 +292,6 @@ return (
           }}
         >
           <button
-            onClick={() => setIsEdgeSelectMode(!isEdgeSelectMode)}
-            style={{
-              flex: "1 1 0%",
-              minWidth: "0",
-              padding: "8px 10px",
-              borderRadius: "8px",
-              fontWeight: "600",
-              fontSize: "12px",
-              cursor: "pointer",
-              
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center", 
-
-              gap: "0px", 
-              
-              border: "1px solid",
-              borderColor: isEdgeSelectMode ? "var(--edgeDelete)" : "var(--border)",
-              color: isEdgeSelectMode ? "var(--edgeDelete)" : "var(--text)",
-              backgroundColor: isEdgeSelectMode ? "color-mix(in srgb, var(--edgeDelete) 10%, transparent)" : "transparent",
-              whiteSpace: "nowrap"
-            }}
-          >
-            <span style={{ 
-              display: "flex", 
-              alignItems: "center", 
-              justifyContent: "center",
-              flexShrink: 0, 
-              minWidth: "20px"
-            }}>
-              <RouteOff color="var(--edgeDelete)" size={14} />
-            </span>
-            <span 
-              className="span_sbr_verbindungen_löschen"
-            >
-              Verbindungen
-            </span>
-          </button>
-
-          <button
             onClick={onDeleteSelected}
             style={{
               flex: "1 1 0%",
@@ -351,9 +309,9 @@ return (
               gap: "0px", 
               
               border: "1px solid",
-              borderColor: isEdgeSelectMode ? "var(--edgeDelete)" : "var(--border)",
-              color: isEdgeSelectMode ? "var(--edgeDelete)" : "var(--text)",
-              backgroundColor: isEdgeSelectMode ? "color-mix(in srgb, var(--edgeDelete) 10%, transparent)" : "transparent",
+              borderColor: "var(--border)",
+              color: "var(--text)",
+              backgroundColor: "transparent",
               whiteSpace: "nowrap"
             }}
           >
@@ -364,7 +322,7 @@ return (
               flexShrink: 0, 
               minWidth: "20px"
             }}>
-              <Trash2 color="var(--edgeDelete)" size={14} />
+              <Trash2 color="var(--delete)" size={14} />
             </span>
             <span 
               className="span_sbr_verbindungen_löschen"

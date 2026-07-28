@@ -208,7 +208,7 @@ function SidebarLeftComponent({
               userSelect: "none",
             }}
           >
-            {!dirName ? "lokalen Ordner verbinden" : "🔑 Berechtigung erteilen"}
+            {!dirName ? "lokalen Ordner verbinden" : "Berechtigung erteilen"}
           </button>
         )}
       {/* Ordner Auswahl Ende */}
@@ -236,7 +236,7 @@ function SidebarLeftComponent({
           className="btn_32pxNormed btn_ordnerWechselnBigNoHasPermission"
           id="btn_sbl_file_permission"
           onClick={onSelectDir}
-          title="🔑 Berechtigung erteilen"
+          title="Berechtigung erteilen"
           style={{
             marginRight: 'auto',
             background: "#eab308",
