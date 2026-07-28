@@ -83,7 +83,8 @@ const hasInitializedRef = useRef(false);
   };
 
   const handleKeyDown = (e) => {
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault(); 
       saveChange();
     } else if (e.key === 'Escape') {
       setIsEditing(false);
