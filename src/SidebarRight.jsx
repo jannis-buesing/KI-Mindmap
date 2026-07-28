@@ -1,15 +1,17 @@
 import { useState, useEffect, useRef, memo } from "react";
-import { RouteOff } from 'lucide-react';
+import { RouteOff, Trash2 } from 'lucide-react';
 
 function SidebarRightComponent({
+  mindmapData,
   selectedNodeIds = [],
   onUpdateNodes,
   isEdgeSelectMode,
   setIsEdgeSelectMode,
+  onDeleteSelected
 }) {
   const isOpen = selectedNodeIds.length > 0 && !isEdgeSelectMode;
   const [SBRisHovered, setSBRisHovered] = useState(false);
-  const [verbindungenAuswählenIsHovered, setVerbindungenAuswählenIsHovered] = useState(false);
+  // const [verbindungenAuswählenIsHovered, setVerbindungenAuswählenIsHovered] = useState(false);
 
   const [nodesVersion, setNodesVersion] = useState(0);
 
@@ -135,21 +137,19 @@ function SidebarRightComponent({
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
   }, [isOpen]);
 
+  if (!mindmapData?._currentFileName) return null;
+
   // =============================================== RETURN ============================================
 
-  return (
+return (
     <div
       onMouseEnter={() => setSBRisHovered(true)}
       onMouseLeave={() => setSBRisHovered(false)}
-      className="sidebar-right-responsive"
+      className={`sidebar-right-responsive ${isOpen ? 'is-open' : 'is-closed'}`}
       style={{
-        // Desktop-Grundmaße via State, mobil per CSS-Klasse überschrieben
         width: isOpen ? "200px" : "20px",
         maxWidth: isOpen ? "200px" : "20px",
-        
-        // KORREKTUR: Verhindert die "gläserne Wand". Wenn geschlossen, ist die Höhe fixiert.
-        height: window.innerWidth <= 380 ? (isOpen ? "auto" : "20px") : "100%",
-        
+        height: "100%",
         position: "relative",
         background: "var(--code-bg)",
         borderLeft: "1px solid var(--border)",
@@ -163,25 +163,33 @@ function SidebarRightComponent({
       }}
     >
       <div
+        className="sbr-content-wrapper" /* KLASSE HINZUGEFÜGT */
         style={{
           opacity: isOpen ? 1 : 0,
           transform: isOpen ? "translateX(0)" : "translateX(10px)",
           transition: "opacity 0.2s ease, transform 0.2s ease",
           display: "flex",
           flexDirection: "column",
-          gap: "24px",
-          height: "100%",
           width: "100%",
           pointerEvents: isOpen ? "auto" : "none",
         }}
       >
-        <div>
+        {/* TITELBOX: Wird mobil per CSS zu Row + Space-Between */}
+        <div
+          className="sbr-header-box" /* KLASSE HINZUGEFÜGT */
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            width: "100%",
+            flexWrap: 'wrap'
+          }}
+        >
           <h3
             style={{
-              margin: "0 0 4px 0",
               fontSize: "16px",
               color: "var(--text-h)",
               fontWeight: 600,
+              whiteSpace: "nowrap"
             }}
           >
             Knoten bearbeiten
@@ -192,64 +200,24 @@ function SidebarRightComponent({
               color: "var(--text)",
               opacity: 0.8,
               margin: "0",
+              whiteSpace: "nowrap"
             }}
           >
             {selectedNodeIds.length} {"Knoten ausgewählt"}
           </p>
         </div>
 
-        {/* EIGENSCHAFT: NAME / LABEL (Auskommentiert, aber voll funktionstüchtig verknüpft) */}
-        {/* <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-          <label style={{ fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.04em", opacity: 0.8 }}>
-            Titel
-          </label>
-          <input
-            id="sidebarRight_Input"
-            type="text"
-            value={localLabel}
-            placeholder={localLabel ? "Knotenname eingeben..." : "— Mehrere Werte —"}
-            onFocus={(e) => {
-              e.target.style.borderColor = "var(--accent)";
-              e.target.select();
-            }}
-            onChange={(e) => {
-              setLocalLabel(e.target.value);
-              if (selectedNodeIds.length === 1) {
-                const liveEvent = new CustomEvent("reactflow-live-label", {
-                  detail: { nodeIds: [selectedNodeIds[0]], field: "label", value: e.target.value },
-                });
-                window.dispatchEvent(liveEvent);
-              }
-            }}
-            onBlur={(e) => {
-              e.target.style.borderColor = "var(--border)";
-              onUpdateNodes("label", localLabel);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") e.target.blur();
-            }}
-            style={{
-              padding: "10px 12px",
-              background: "var(--bg)",
-              border: "1px solid var(--border)",
-              borderRadius: "8px",
-              fontSize: "13px",
-              color: "var(--text-h)",
-              outline: "none",
-              fontFamily: "var(--sans)",
-              transition: "border-color 0.2s",
-            }}
-          />
-        </div> */}
-
         {/* FELD: FARBEN */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+        <div
+          style={{ display: "flex", flexDirection: "column", gap: "0px" }}
+        >
           <label
             style={{
-              fontSize: "12px",
+              fontSize: "10px",
               textTransform: "uppercase",
               letterSpacing: "0.04em",
               opacity: 0.8,
+              height: '22px'
             }}
           >
             Farbe
@@ -259,30 +227,32 @@ function SidebarRightComponent({
             style={{
               width: "100%",
               background: "var(--bg)",
-              padding: "6px",
+              padding: "4px",
               border: "1px solid var(--border)",
               borderRadius: "8px",
               boxSizing: "border-box",
             }}
           >
             <div
+              className="sbr-colors-grid" /* KLASSE HINZUGEFÜGT */
               style={{
                 display: "grid",
                 gridTemplateColumns: "repeat(4, 1fr)",
-                gap: "6px",
+                gap: "4px",
                 width: "100%",
-                justifyItems: "stretch",
+                justifyItems: "center",
+                alignItems: 'center'
               }}
-              >
+            >
               {[
                 "var(--default-node-border)",
-                "#f59e0b", // Gelb
-                "#aa3bff", // Lila
-                "#ec4899", // Pink
-                "#10b981", // Grün
-                "#ff4a4a", // Rot
-                "#3b82f6", // Blau
-                "#f97316", // Orange
+                "#ff4a4a",
+                "#f97316",
+                "#f59e0b",
+                "#10b981",
+                "#3cd5e0",
+                "#223ee0",
+                "#aa3bff",
               ].map((color) => {
                 const isSelected =
                   currentColor !== "" &&
@@ -292,21 +262,18 @@ function SidebarRightComponent({
                   <button
                     className="sideBarRight_colorButton"
                     key={color}
-                    // title={color}
                     title={showDefaultTitle}
                     onClick={() => onUpdateNodes("borderColor", color)}
                     style={{
                       width: "100%",
                       aspectRatio: "1",
                       background: color,
-                      border: isSelected
-                        ? "2px solid var(--accent)"
-                        : "1px solid rgba(0,0,0,0.15)",
-                      borderRadius: "6px",
+                      border: isSelected ? "2px solid var(--accent)" : "1px solid rgba(0,0,0,0.15)",
+                      borderRadius: "5px",
                       cursor: "pointer",
-                      transform: isSelected ? "scale(1.1)" : "scale(1)",
+                      transform: isSelected ? "scale(1.05)" : "scale(1)",
                       transition: "transform 0.1s ease, border-color 0.1s ease",
-                      boxShadow: isSelected ? "0 0 8px var(--accent)" : "none",
+                      boxShadow: isSelected ? "0 0 6px var(--accent)" : "none",
                     }}
                   />
                 );
@@ -315,58 +282,98 @@ function SidebarRightComponent({
           </div>
         </div>
 
-        {/* Button EdgeSelection */}
-        <button
-          onClick={() => setIsEdgeSelectMode(!isEdgeSelectMode)}
-          onMouseEnter={() => setVerbindungenAuswählenIsHovered(true)}
-          onMouseLeave={() => setVerbindungenAuswählenIsHovered(false)}
-          title="Verbindungen durch Markieren der dazugehörigen Knoten auswählen"
+        {/* BUTTONS: Werden mobil per CSS nebeneinandergelegt */}
+        <div
+          className="sbr-buttons-wrapper" /* KLASSE HINZUGEFÜGT */
           style={{
-            width: '100%',
-            padding: '10px',
-            borderRadius: '8px',
-            fontWeight: '600',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '6px',
-            border: '1px solid',
-            transition: 'background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease',
-            borderColor: isEdgeSelectMode ? 'var(--edgeDelete)' : 'var(--border)',
-            color: isEdgeSelectMode ? 'var(--edgeDelete)' : 'var(--text)',
-            backgroundColor: isEdgeSelectMode
-              ? (verbindungenAuswählenIsHovered 
-                  ? 'color-mix(in srgb, var(--edgeDelete) 20%, transparent)' 
-                  : 'color-mix(in srgb, var(--edgeDelete) 10%, transparent)')
-              : (verbindungenAuswählenIsHovered 
-                  ? 'color-mix(in srgb, var(--text) 8%, transparent)' 
-                  : 'transparent')
+            marginTop: '8px',
+            display: "flex",
+            flexDirection: "column",
+            gap: "8px",
+            width: "100%"
           }}
         >
-          <RouteOff color="var(--edgeDelete)" />Verbindungen auswählen
-        </button>
-      </div>
+          <button
+            onClick={() => setIsEdgeSelectMode(!isEdgeSelectMode)}
+            style={{
+              flex: "1 1 0%",
+              minWidth: "0",
+              padding: "8px 10px",
+              borderRadius: "8px",
+              fontWeight: "600",
+              fontSize: "12px",
+              cursor: "pointer",
+              
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center", 
 
-      {/* INDIKATOR WENN GESCHLOSSEN */}
-      {!isOpen && (
-        <div
-          className="sidebar-indicator-responsive" /* Verknüpfung zur CSS-Medienabfrage */
-          style={{
-            position: "absolute",
-            top: "20px",
-            left: "50%",
-            transform: "translateX(-50%)",
-            width: "2px",
-            height: "calc(100% - 40px)",
-            background: SBRisHovered ? "var(--accent)" : "var(--border)",
-            borderRadius: "2px",
-            opacity: SBRisHovered ? 1 : 0.6,
-            transition: "background 0.2s ease, opacity 0.2s ease, top 0.3s, left 0.3s, transform 0.3s, width 0.3s, height 0.3s",
-            pointerEvents: "none",
-          }}
-        />
-      )}
+              gap: "0px", 
+              
+              border: "1px solid",
+              borderColor: isEdgeSelectMode ? "var(--edgeDelete)" : "var(--border)",
+              color: isEdgeSelectMode ? "var(--edgeDelete)" : "var(--text)",
+              backgroundColor: isEdgeSelectMode ? "color-mix(in srgb, var(--edgeDelete) 10%, transparent)" : "transparent",
+              whiteSpace: "nowrap"
+            }}
+          >
+            <span style={{ 
+              display: "flex", 
+              alignItems: "center", 
+              justifyContent: "center",
+              flexShrink: 0, 
+              minWidth: "20px"
+            }}>
+              <RouteOff color="var(--edgeDelete)" size={14} />
+            </span>
+            <span 
+              className="span_sbr_verbindungen_löschen"
+            >
+              Verbindungen
+            </span>
+          </button>
+
+          <button
+            onClick={onDeleteSelected}
+            style={{
+              flex: "1 1 0%",
+              minWidth: "0",
+              padding: "8px 10px",
+              borderRadius: "8px",
+              fontWeight: "600",
+              fontSize: "12px",
+              cursor: "pointer",
+              
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center", 
+
+              gap: "0px", 
+              
+              border: "1px solid",
+              borderColor: isEdgeSelectMode ? "var(--edgeDelete)" : "var(--border)",
+              color: isEdgeSelectMode ? "var(--edgeDelete)" : "var(--text)",
+              backgroundColor: isEdgeSelectMode ? "color-mix(in srgb, var(--edgeDelete) 10%, transparent)" : "transparent",
+              whiteSpace: "nowrap"
+            }}
+          >
+            <span style={{ 
+              display: "flex", 
+              alignItems: "center", 
+              justifyContent: "center",
+              flexShrink: 0, 
+              minWidth: "20px"
+            }}>
+              <Trash2 color="var(--edgeDelete)" size={14} />
+            </span>
+            <span 
+              className="span_sbr_verbindungen_löschen"
+            >
+              {selectedNodeIds.length} {"Knoten löschen"}
+            </span>
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -1178,8 +1178,40 @@ const handleUpdateSelectedNodes = useCallback((field, value, targetNodeId = null
     });
   }, []);
 
-  return (
-    <div onContextMenu={(e) => e.preventDefault()} style={{ display: 'flex', position: 'relative', flex: '1 1 auto', width: '100vw', height: '100vh', overflow: 'hidden' }}>
+const deleteSelectedNodes = useCallback(() => {
+  const includesRoot = selectedNodeIds.includes('root');
+
+  const filteredIds = selectedNodeIds.filter(id => id !== 'root');
+  
+  if (includesRoot) {
+    alert('Der Hauptknoten kann nicht gelöscht werden!');
+  }
+
+  if (filteredIds.length === 0) return;
+
+  handleDeleteNodes(filteredIds);
+
+  window.dispatchEvent(
+    new CustomEvent('reactflow-nodes-delete', { 
+      detail: { nodeIds: filteredIds } 
+    })
+  );
+}, [selectedNodeIds, handleDeleteNodes]);
+
+return (
+    <div
+      className='app-container'
+      onContextMenu={(e) => e.preventDefault()}
+      style={{
+        display: 'flex',
+        position: 'relative',
+        flex: '1 1 auto',
+        width: '100vw',
+        /* KORREKTUR: dvh sorgt dafür, dass die Leiste über den Handytasten schwebt */
+        height: '100dvh',
+        overflow: 'hidden'
+      }}
+    >
       <Analytics/>
       {loading && <style>{`* { cursor: wait !important; }`}</style>}
       <SidebarLeft
@@ -1205,29 +1237,36 @@ const handleUpdateSelectedNodes = useCallback((field, value, targetNodeId = null
         setOverlayAPIKeyTutorial={setOverlayAPIKeyTutorial}
         isOverlayOpen={!!showOverlay}
       />
-      <div style={{ 
-        flex: '1 1 20%', 
-        minWidth: '240px', 
-        padding: 'var(--container-padding, 30px)', /* Nutzt die reaktive Variable */
-        display: 'flex', 
-        flexDirection: 'column', 
-        overflow: 'hidden' 
-      }}>
-        <header style={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'center',
-          padding: 'var(--header-padding, 0px)' /* Hält Text auf Handys auf Abstand */
-        }}>
+      <div
+        className='middle-content-container'
+        style={{
+          flex: '1 1 auto', /* Erlaubt dynamisches Mitwachsen */
+          minWidth: 'var(--mid-min-width, 240px)',
+          padding: 'var(--container-padding, 30px)',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          boxSizing: 'border-box'
+        }}
+      >
+        <header
+          id='header_KI_Mindmap' 
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            textAlign: 'center',
+            padding: 'var(--header-padding, 0px)' /* Hält Text auf Handys auf Abstand */
+          }}>
           <div>{!mindmapData?._currentFileName && <h1>KI Mindmap</h1>}</div>
         </header>
         {mindmapData ? (
-          <MindmapBoard 
+          <MindmapBoard
             rawData={mindmapData}
             setMindmapData={setMindmapData}
             currentFileName={mindmapData?._currentFileName}
             currentMapId={currentMapId}
-            positions={mindmapData.positions} 
+            positions={mindmapData.positions}
             onNodesSelect={setSelectedNodeIds}
             selectedNodeIds={selectedNodeIds}
             isEdgeSelectMode={isEdgeSelectMode}
@@ -1236,7 +1275,7 @@ const handleUpdateSelectedNodes = useCallback((field, value, targetNodeId = null
             setIsViewReady={setIsViewReady}
           />
         ) : (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--code-bg)', borderRadius: '12px', border: '1px dashed var(--border)', marginTop: '20px' }}>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', background: 'var(--code-bg)', borderRadius: '12px', border: '1px dashed var(--border)', marginTop: '16px' }}>
             {dirHandle && hasPermission
               ? 'Wähle links eine Mindmap aus oder erstelle eine neue.'
               : !hasPermission && dirHandle
@@ -1253,18 +1292,19 @@ const handleUpdateSelectedNodes = useCallback((field, value, targetNodeId = null
         />
       </div>
       <SidebarRight
+        mindmapData={mindmapData}
         selectedNodeIds={selectedNodeIds}
         onUpdateNodes={handleUpdateSelectedNodes}
         isEdgeSelectMode={isEdgeSelectMode}
         setIsEdgeSelectMode={setIsEdgeSelectMode}
+        onDeleteSelected={deleteSelectedNodes}
       />
-
-      <Overlay 
-        type={showOverlay} 
+      <Overlay
+        type={showOverlay}
         onClose={() => {
           setShowOverlay(null);
           setCopyMapData(null);
-        }} 
+        }}
         nodes={copyMapData?.nodes || []}
         mindmapData={copyMapData}
       />

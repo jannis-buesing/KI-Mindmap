@@ -351,6 +351,10 @@ export function MindmapBoardContent({
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const { getNodes, screenToFlowPosition, fitView } = useReactFlow();
+  
+  const [isMultiTouch, setIsMultiTouch] = useState(false);
+  const isMobile = typeof window !== 'undefined' && 
+  ('ontouchstart' in window || navigator.maxTouchPoints > 0);
 
   const updateNodeInternals = useUpdateNodeInternals();
 
@@ -872,7 +876,7 @@ export function MindmapBoardContent({
 
   // ==================================================== RETURN =========================================================
 
-  return (
+    return (
     <div
       onDoubleClick={(event) => {
         event.preventDefault();
@@ -889,19 +893,34 @@ export function MindmapBoardContent({
           window.dispatchEvent(new CustomEvent('reactflow-node-create', { detail: { position: snappedPos, parentId: null } }));
         }
       }}
-      style={{ 
-        width: '100%', 
+      style={{
+        width: '100%',
         height: '100%', 
-        outline: isEdgeSelectMode ? '1px solid var(--edgeDelete)' : '1px solid var(--border)', 
-        borderRadius: '12px', 
-        overflow: 'hidden', 
-        userSelect: 'none', 
+        
+        /* FIX 1: Wir garantieren Flex-Grow auf 1, damit es sich den Platz 
+          im middle-content-container erzwingt, selbst wenn dieser wackelt */
+        flex: '1 1 100%', 
+        minHeight: '200px', /* FIX 2: Ein harter Fallback. Falls die Berechnung auf 0px rutscht, hat React Flow trotzdem eine Basis und stürzt nicht ab! */
+        
+        marginBottom: 'var(--board-margin, 8px)',
+        
+        outline: isEdgeSelectMode ? '1px solid var(--edgeDelete)' : '1px solid var(--border)',
+        borderRadius: '12px',
+        overflow: 'hidden',
+        userSelect: 'none',
+        
+        /* FIX 3: Wir nutzen display flex, aber stellen sicher, dass das 
+          Board nicht rendert, WÄHREND ein display: none von außen droht */
         display: 'flex',
+        
+        visibility: isViewReady ? 'visible' : 'hidden',
         opacity: isViewReady ? 1 : 0,
         transition: 'opacity 0.2s ease-in-out'
       }}
     >
-      <div style={{ flex: 1, height: '100%', position: 'relative' }}>
+      <div 
+        style={{ flex: 1, height: '100%', width: '100%', position: 'relative' }}
+      >
         <ReactFlow
           className={isEdgeSelectMode ? 'hide-node-selection' : ''}
           proOptions={{ hideAttribution: true }}
@@ -922,31 +941,40 @@ export function MindmapBoardContent({
           onEdgesDelete={handleEdgesDelete}
           onNodesChange={onNodesChangeCustom}
           onNodeDragStop={onNodeDragStopCustom}
-          onEdgesChange={onEdgesChangeCustom} 
+          onEdgesChange={onEdgesChangeCustom}
           onSelectionChange={onSelectionChangeCustom}
           onSelectionEnd={handleSelectionEnd}
-          snapToGrid={true} 
+          snapToGrid={true}
           snapGrid={[15, 15]}
           defaultViewport={defaultViewport}
           onMoveEnd={handleDefaultViewportMoveEnd}
           fitView={false}
           selectNodesOnDrag={true}
           nodesDraggable={!isEdgeSelectMode}
-          panOnDrag={[2]}
-          onPaneContextMenu={(e) => e.preventDefault()} 
-          onNodeContextMenu={(e) => e.preventDefault()} 
-          onEdgeContextMenu={(e) => e.preventDefault()} 
-          zoomOnDoubleClick={false} 
-          panOnScroll={false} 
+          panOnDrag={isMobile ? true : [2]}
+
+          onPaneContextMenu={(e) => e.preventDefault()}
+          onNodeContextMenu={(e) => e.preventDefault()}
+          onEdgeContextMenu={(e) => e.preventDefault()}
+
+          zoomOnDoubleClick={false}
+          panOnScroll={false}
+          zoomOnPinch={true}
           zoomOnScroll={true}
-          selectionOnDrag={true}
-          selectionKeyCode={null} 
+
+          selectionOnDrag={isMobile ? false : true}
+          selectionKeyCode={null}
           selectionMode='partial'
           translateExtent={[[-10000, -10000], [10000, 10000]]}
           nodeExtent={[[-10000, -10000], [10000, 10000]]}
         >
           <Background color="var(--text)" gap={15} size={1.5} />
-          <MiniMap position="bottom-left" nodeColor="var(--accent)" maskColor="rgba(0, 0, 0, 0.15)" style={{ background: 'color-mix(in srgb, var(--code-bg) 25%, transparent)', border: '1px solid var(--border)', borderRadius: '8px', width: 200, height: 150, pointerEvents: 'none', cursor: 'default' }} />
+          <MiniMap
+            position="bottom-left"
+            nodeColor="var(--accent)"
+            maskColor="rgba(0, 0, 0, 0.15)"
+            className="custom-minimap"
+          />
         </ReactFlow>
         {nodes.some(n => selectedNodeIds.includes(n.id) && !!n.data?.status) && !isEdgeSelectMode && (
           <div id='div_BulkDecisionParent' style={{ position: 'absolute', top: '0', left: '50%', transform: 'translate(-50%)', zIndex: 1000, background: 'var(--code-bg)', outline: '1px solid var(--border)', borderRadius: '12px', padding: '10px 24px', display: 'flex', flexDirection: 'column', gap: '6px', justifyContent: 'center', alignItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
@@ -984,15 +1012,15 @@ export const MindmapBoard = React.memo(function MindmapBoard(props){
   if (prevProps.setIsEdgeSelectMode !== nextProps.setIsEdgeSelectMode) return false;
   if (prevProps.isViewReady !== nextProps.isViewReady) return false;
   if (prevProps.rawData !== nextProps.rawData) return false;
-  
+ 
   const pSel = prevProps.selectedNodeIds || [];
   const nSel = nextProps.selectedNodeIds || [];
   if (pSel.length !== nSel.length) return false;
-  
+ 
   const pSet = new Set(pSel);
   for (let i = 0; i < nSel.length; i++) {
     if (!pSet.has(nSel[i])) return false;
   }
-  
+ 
   return true;
 });

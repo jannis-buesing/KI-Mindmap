@@ -128,6 +128,9 @@ function SidebarLeftComponent({
 
   useEffect(() => {
     localStorage.setItem('isOpen', isOpen);
+
+    const event = new CustomEvent("sbl_toggle", { detail: isOpen });
+    window.dispatchEvent(event);
   }, [isOpen]);
 
   useEffect(() => {
@@ -734,7 +737,8 @@ function SidebarLeftComponent({
                 title="Ordnerpfad wechseln"
                 style={{
                   background: activePopup === 'file' ? 'var(--accent)' : '',
-                  marginRight: 'auto'
+                  position: isOpen ? 'absolute' : 'relative',
+                  left: isOpen ? '0px' : 'auto',
                 }}
               >
                 <FolderOpen/>

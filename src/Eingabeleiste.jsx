@@ -135,32 +135,36 @@ function EingabeleisteComponent({
     }
   }, [userInput, eingabeleisteIsExpanded]);
 
+  const [sbl_isOpen, setSbl_isOpen] = useState(true);
+  useEffect(() => {
+    // Auf den Funkspruch hören
+    const handleEvent = (e) => {
+      setSbl_isOpen(e.detail); // e.detail enthält den gesendeten Wert
+    };
+
+    window.addEventListener("sbl_toggle", handleEvent);
+    return () => window.removeEventListener("sbl_toggle", handleEvent);
+  }, []);
+
   if (!mindmapData?._currentFileName) return null;
 
   const count = selectedNodeIds.length;
 
   // Dynamische Styles für den Container (Desktop vs. Handy)
- const containerStyle = {
-  display: "flex",
-  alignItems: "center",
-  gap: "8px",
-  width: "100%",
-  padding: "8px 12px",
-  background: "var(--bg)", // Nutzt das Haupt-Background-Token der Popups
-  border: "1px solid var(--border)",
-  borderRadius: "6px", // Konsistent mit den Buttons (z.B. .btn_mappedMindmaps)
-  boxSizing: "border-box",
-  transition: "border-color 0.2s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.2s ease",
-  
-  // Optional: Visuelles Feedback, wenn in das integrierte Input-Feld geklickt wird
-  "&:focusWithin": {
-    borderColor: "var(--accent)",
-    boxShadow: "0 0 0 1px var(--accent-border)",
-  }
-};
+   const containerStyle = {
+    display: "flex",
+    alignItems: "center",
+    width: "100%",
+    background: "var(--bg)",
+    borderRadius: "6px",
+    boxSizing: "border-box",
+    transition: "border-color 0.2s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.2s ease",
+    flexShrink: 0,
+    zIndex: 10,
+  };
 
   return (
-    <div style={containerStyle}>
+    <div style={containerStyle} className="eingabeleiste-container">
       {/* HILFSELEMENT */}
       <span
         ref={spanRef}
@@ -195,11 +199,11 @@ function EingabeleisteComponent({
             ref={inputRef}
             type="text"
             placeholder={ isEdgeSelectMode
-              ? "Mindmap erweitern..." 
+              ? "Mindmap erweitern..."
               : selectedNodeIds.length > 1000
                 ? "1000+ Knoten bearbeiten..."
-                : selectedNodeIds.length > 1 
-                  ? `${selectedNodeIds.length} Knoten bearbeiten...` 
+                : selectedNodeIds.length > 1
+                  ? `${selectedNodeIds.length} Knoten bearbeiten...`
                   : selectedNodeIds.length === 1 ?
                     "Knoten bearbeiten..."
                     : selectedNodeIds.length === 0
@@ -231,7 +235,7 @@ function EingabeleisteComponent({
               outline: 'none',
             }}
           />
-          
+         
           <NodeIndicatorBadge count={count} isEdgeSelectMode={isEdgeSelectMode} />
 
           <button
@@ -247,7 +251,7 @@ function EingabeleisteComponent({
               cursor: loading || userInput.trim().length === 0 ? 'not-allowed' : 'pointer',
               fontSize: '14px',
               fontWeight: '600',
-              display: 'flex',
+              display: sbl_isOpen ? 'none' : 'flex',
               alignItems: 'center',
               gap: '6px',
               transition: 'all 0.2s',
@@ -282,8 +286,8 @@ function EingabeleisteComponent({
               ref={textareaRef}
               rows={1}
               maxLength={10000}
-              placeholder={selectedNodeIds.length > 1 
-                ? `${selectedNodeIds.length} Knoten bearbeiten...` 
+              placeholder={selectedNodeIds.length > 1
+                ? `${selectedNodeIds.length} Knoten bearbeiten...`
                 : selectedNodeIds.length === 1 ?
                   "Knoten bearbeiten..."
                   : selectedNodeIds.length === 0
@@ -333,7 +337,7 @@ function EingabeleisteComponent({
           </div>
 
           <div style={{ height: '1px', background: 'var(--border)', margin: '4px -12px 6px -12px' }} />
-          
+         
           <div style={{
             display: 'flex',
             alignItems: 'center',
@@ -353,10 +357,10 @@ function EingabeleisteComponent({
                 </span>
               )}
             </div>
-            
+           
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <NodeIndicatorBadge count={count} isEdgeSelectMode={isEdgeSelectMode} />
-              
+             
               <button
                 onClick={handleSubmit}
                 disabled={loading || userInput.trim().length === 0}

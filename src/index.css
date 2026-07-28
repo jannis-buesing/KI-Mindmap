@@ -1,26 +1,10 @@
-:root, html[data-theme="light"] {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f8f9fa;
-  --accent: #b385d8;
-  --accent-bg: rgba(164, 115, 202, 0.1);
-  --accent-border: rgba(170, 119, 209, 0.5);
-  --default-node-border: #cfcfcf;
-  --edgeDelete: #e47f7f;
-
-  /* Proposals:  */
-  --status-updated: #eedf59; /* Klassisches Gelb */
-  --status-deleted: #ef4444; /* Klassisches Rot */
-  --status-added: #22c55e;   /* Klassisches Grün */
-
+:root {
   --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
   --mono: ui-monospace, Consolas, monospace;
 
-  --container-padding: 30px;
-  --header-padding: 0px;
-  --board-margin: 0px;
+  --container-padding: 16px;
+  --header-padding: 2px 0px 0px 4px;
+  --board-margin: 16px;
   --board-radius: 12px;
 
   /* SidebarRight Desktop-Standards */
@@ -40,6 +24,19 @@
   --sbr-ind-transform: translateX(-50%);
   --sbr-ind-width: 2px;
   --sbr-ind-height: calc(100% - 40px);
+
+  --sbr-padding: 16px;
+  --sbr-gap: 24px;
+  --sbr-color-cols: repeat(4, 1fr);
+  --sbr-btn-direction: column;
+  --sbr-font-title: 16px;
+  --sbr-font-label: 12px;
+
+  --sbr-header-direction: column;
+  --sbr-header-justify: flex-start;
+  --sbr-header-align: stretch;
+  --sbr-color-gap: 6px;
+  --sbr-content-height: 100%;
 
   font: 18px/145% var(--sans);
   color: var(--text);
@@ -68,6 +65,24 @@
   }
 }
 
+html[data-theme="light"] {
+  --text: #6b6375;
+  --text-h: #08060d;
+  --bg: #fff;
+  --border: #e5e4e7;
+  --code-bg: #f8f9fa;
+  --accent: #b385d8;
+  --accent-bg: rgba(164, 115, 202, 0.1);
+  --accent-border: rgba(170, 119, 209, 0.5);
+  --default-node-border: #cfcfcf;
+  --edgeDelete: #e47f7f;
+
+  /* Proposals:  */
+  --status-updated: #eedf59; /* Klassisches Gelb */
+  --status-deleted: #ef4444; /* Klassisches Rot */
+  --status-added: #22c55e;   /* Klassisches Grün */
+}
+
 html[data-theme="dark"] {
   --text: #9ca3af;
   --text-h: #f3f4f6;
@@ -86,43 +101,148 @@ html[data-theme="dark"] {
   --status-added: #4ade80;
 }
 
-/* ALLGEMEIN AM HANDY (z.B. bis 768px) */
-@media (max-width: 768px) {
-  :root {
-    --container-padding: 0px; /* Eingabeleiste dockt nahtlos an */
-    --header-padding: 12px 12px 0 12px;
-    --board-margin: 6px; /* Gibt dem Mindmap-Board Raum zum Atmen */
-    --board-radius: 8px;
+.custom-minimap {
+  width: 200px !important;
+  height: 150px !important;
+  background: color-mix(in srgb, var(--code-bg) 25%, transparent) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 8px !important;
+  pointer-events: none !important;
+  cursor: default !important;
+}
+
+.custom-minimap svg {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+}
+
+.span_sbr_verbindungen_löschen {
+  display: inline-block;
+  
+  /* DER DREIZEILER FÜR DIE ELLIPSIS: */
+  white-space: nowrap;     /* 1. Verhindert den Zeilenumbruch */
+  overflow: hidden;        /* 2. Schneidet überstehenden Text ab */
+  text-overflow: ellipsis; /* 3. Fügt die "..." am Ende an */
+  
+  max-width: 100%;
+}
+
+#header_KI_Mindmap {
+  font-size: 18px;
+}
+
+div:has(> .sbr-colors-grid) {
+  container-type: inline-size !important;
+}
+
+@media (max-width: 700px) {
+  /* ZUSTAND 1: Standardmäßig ein 8x1 Grid (Dein Original-Code) */
+  .sbr-colors-grid {
+    grid-template-columns: repeat(8, 1fr) !important;
+  }
+
+  .sbr-colors-grid > * {
+    width: 100% !important;
+    max-width: 50px !important; 
+    min-width: 15px !important; 
+    aspect-ratio: 1 / 1 !important; 
+  }
+
+  /* ZUSTAND 2: Wenn die Container-Breite unter 280px fällt, 
+     schalten wir hart auf das 4x2 Grid um */
+  @container (max-width: 175px) {
+    .sbr-colors-grid {
+      grid-template-columns: repeat(4, 1fr) !important;
+    }
   }
 }
 
-/* SPEZIELL FÜR APPS UNTER 380px (Sidebar wird zur horizontalen Top-Bar) */
-@media (max-width: 380px) {
+
+/* SPEZIELL FÜR SMARTPHONES */
+@media (max-width: 700px) {
   :root {
-    --container-padding: 24px 0px 0px 0px; /* Schafft Platz für die geschlossene Top-Bar */
+    --container-padding: 24px 8px 8px 8px; /* Etwas kompakter für Mini-Displays */
+    --header-padding: 4px 0px 0px 4px;
+    --board-margin: 8px;
+    --mid-min-width: 0;
   }
 
-  /* Direkte Steuerung der Sidebar-Klasse statt fehleranfälliger :root-Variablen */
-  .sidebar-right-responsive {
+  #header_KI_Mindmap {
+    font-size: 14px;
+  }
+
+  .app-container {
+    display: grid !important;
+    grid-template-columns: auto 1fr;
+    grid-template-rows: 1fr;
+    width: 100vw;
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  .middle-content-container {
+    grid-column: 2;
+    grid-row: 1;
+    z-index: 1;
     width: 100% !important;
     max-width: 100% !important;
-    position: absolute !important;
-    top: 0 !important;
-    left: 0 !important;
-    border-left: none !important;
-    border-bottom: 1px solid var(--border) !important;
-    z-index: 1010 !important;
   }
 
-  /* Indikator wird im mobilen Zustand zur zentrierten, flachen Pille */
-  .sidebar-indicator-responsive {
-    top: 9px !important;
-    left: 50% !important;
-    transform: translateX(-50%) !important;
-    width: 40px !important;
-    height: 2px !important;
+  .custom-minimap {
+    width: 100px !important;
+    height: 75px !important;
+  }
+
+  .sidebar-right-responsive {
+    grid-column: 2;
+    grid-row: 1;
+    z-index: 1010;
+    position: relative !important;
+    align-self: start;
+    width: 100% !important;
+    max-width: 100% !important;
+    border-left: none !important;
+    border-bottom: 1px solid var(--border) !important;
+    padding: 10px !important;
+  }
+  .sidebar-right-responsive.is-closed {
+    height: 20px !important;
+  }
+  .sidebar-right-responsive.is-open {
+    height: auto !important;
+  }
+
+  .sbr-content-wrapper {
+    height: auto;
+    /* gap: 10px; */
+  }
+
+  .sbr-header-box {
+    flex-direction: row !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+  }
+ 
+  /* Extrem-Schrumpfung für Displays unter 340px */
+  .sbr-header-box h3 { font-size: 13px !important; }
+  .sbr-header-box p { font-size: 10px !important; }
+
+  .sbr-buttons-wrapper {
+    flex-direction: row !important;
+    gap: 6px !important;
+  }
+ 
+  /* Falls die Eingabeleiste Kindelemente hat, die stauchen müssen */
+  .eingabeleiste-container {
+    width: 100% !important;
+    gap: 4px !important;
+    padding: 0 !important;
+    margin: 0 !important;
   }
 }
+
+/* responsive Sidebarright Ende */
 
 body {
   margin: 0;
@@ -135,7 +255,7 @@ body {
 
 #root {
   width: 100vw;
-  height: 100vh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
