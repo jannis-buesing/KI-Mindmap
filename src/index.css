@@ -356,7 +356,7 @@ code {
 
 /* ============================= SideBarLeft Popup-Window Ende ========================= */
 
-/* ====================== SideBarLeft Overlay Ende ========================= */
+/* ====================== Overlay Start ========================= */
 
 .elegant-card {
   background: var(--code-bg, #fafafa);
@@ -371,17 +371,19 @@ code {
   width: 100%;
   font-family: inherit;
   text-align: left;
+  box-sizing: border-box;
 }
 
-/* Der Hover-Effekt direkt im CSS */
 .elegant-card:hover {
   transform: translateY(-4px);
   border-color: var(--text-h);
   box-shadow: 0 12px 20px rgba(0, 0, 0, 0.08);
 }
 
+/* Die Preview-Box wächst jetzt auf dem Desktop, passt sich am Handy aber an */
 .preview-box {
-  height: 210px;
+  min-height: 120px;
+  height: 210px; 
   background: rgba(0, 0, 0, 0.02);
   border-bottom: 1px solid var(--border);
   display: flex;
@@ -415,7 +417,30 @@ code {
   opacity: 0.85;
 }
 
-/* ====================== SideBarLeft Overlay Ende ========================= */
+/* --- MOBILE ANPASSUNGEN (Smartphones & kleine Tablets) --- */
+@media (max-width: 600px) {
+  .preview-box {
+    height: auto; /* Hebt die starre 210px-Höhe am Handy auf */
+    padding: 16px;
+  }
+
+  /* Verhindert, dass die JSON-Vorschau am Handy das Overlay sprengt */
+  .preview-box pre {
+    max-height: 150px !important;
+  }
+
+  /* Setzt den Versatz (marginTop) bei der API-Anleitung am Handy zurück */
+  .tutorial-grid, .copy-grid {
+    grid-template-columns: 1fr !important; /* Erzwingt eine Spalte */
+    gap: 16px !important;
+  }
+
+  .tutorial-right-column {
+    margin-top: 0 !important; /* Entfernt das Herunterrutschen auf kleinen Displays */
+  }
+}
+
+/* ====================== Overlay Ende ========================= */
 
 /* ========================= Mindmap Start ======================== */
 
